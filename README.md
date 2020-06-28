@@ -9,3 +9,5 @@ Notable modifications include:
   - Execute script at startup ([autostart patch](http://dwm.suckless.org/patches/autostart/))
   - Move clients across the stack ([movestack patch](https://dwm.suckless.org/patches/movestack/))
   - Set a client's relative size within slave area ([cfact patch](https://dwm.suckless.org/patches/cfacts/))
+  - Activate client on NET_ACTIVE_WINDOW client messages (([focusonnetactive patch](https://dwm.suckless.org/patches/focusonnetactive/))
+    + Allows to activate clients by their window ID using tools like xdotool
