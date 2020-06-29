@@ -11,3 +11,8 @@ Notable modifications include:
   - Set a client's relative size within slave area ([cfact patch](https://dwm.suckless.org/patches/cfacts/))
   - Activate client on NET_ACTIVE_WINDOW client messages (([focusonnetactive patch](https://dwm.suckless.org/patches/focusonnetactive/))
     + Allows to activate clients by their window ID using tools like xdotool
+
+# Todos
+
+TODO(fix): Changing active tags sometimes forgets focus history.
+  - Wrong window is activated
