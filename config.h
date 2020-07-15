@@ -85,7 +85,7 @@ static Key keys[] = {
 	{ MODKEY|ShiftMask , XK_period , setmfact       , {.f = +0.05} }       , // inc master area
 	{ MODKEY|ShiftMask , XK_Return , zoom           , {0} }                , // raise to top of stack
 	{ MODKEY           , XK_Tab    , view           , {0} }                , // select previous tag
-	{ MODKEY|ShiftMask , XK_q      , killclient     , {0} }                ,
+	{ MODKEY           , XK_q      , killclient     , {0} }                ,
 	{ MODKEY           , XK_minus  , setcfact       , {.f = -0.25} }       ,
 	{ MODKEY|ShiftMask , XK_equal  , setcfact       , {.f = +0.25} }       ,
 	{ MODKEY           , XK_t      , setlayout      , {.v = &layouts[0]} } ,
