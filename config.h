@@ -38,6 +38,7 @@ static const Rule rules[] = {
 	{ "Spacefm"     , NULL         , NULL  , 0         , 1          , -1 }    ,
 	{ "Yad"         , NULL         , NULL  , 0         , 1          , -1 }    ,
   { "st-256color" , "st-float"   , NULL  , 0         , 1          , -1 }    ,
+  { "st-256color" , "st-wiki"    , NULL  , (1 << 8)  , 0          , -1 }    ,
   { "Sxiv"        , "sxiv-float" , NULL  , 0         , 1          , -1 }    ,
 };
 
@@ -79,7 +80,6 @@ static Key keys[] = {
 	{ MODKEY|ShiftMask , XK_j      , moveclient     , {.i = +1 } }         , // navigate client within stack
 	{ MODKEY|ShiftMask , XK_k      , moveclient     , {.i = -1 } }         , // navigate client within stack
 	{ MODKEY           , XK_i      , incnmaster     , {.i = +1 } }         , // inc num of masters
-	{ MODKEY           , XK_p      , dbginfo        , {0} }         , // inc num of masters
 	{ MODKEY|ShiftMask , XK_i      , incnmaster     , {.i = -1 } }         , // dec num of masters
 	{ MODKEY|ShiftMask , XK_comma  , setmfact       , {.f = -0.05} }       , // dec master area
 	{ MODKEY|ShiftMask , XK_period , setmfact       , {.f = +0.05} }       , // inc master area
