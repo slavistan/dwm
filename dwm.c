@@ -1850,10 +1850,9 @@ spawn(const Arg *arg)
 void
 statusclk(const Arg *arg)
 {
-  infof("arg->i = %d\n", arg->i);
   char buf[16];
   char cmdbuf[32];
-  sprintf(cmdbuf, "notify-send -- char %d", arg->i);
+  sprintf(cmdbuf, "dwmbricks kick --utf8index %d", arg->i);
   FILE *fp = popen(cmdbuf, "r");
   fgets(buf, sizeof(buf), fp);
   pclose(fp);
