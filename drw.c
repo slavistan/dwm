@@ -35,7 +35,7 @@ utf8validate(long *u, size_t i)
 	return i;
 }
 
-static size_t
+size_t
 utf8decode(const char *c, long *u, size_t clen)
 {
 	size_t i, j, len, type;
@@ -317,6 +317,7 @@ drw_text(Drw *drw, int x, int y, unsigned int w, unsigned int h, unsigned int lp
 				memcpy(buf, utf8str, len);
 				buf[len] = '\0';
 				if (len < utf8strlen)
+          /* draw '.' to indicate shortened text */
 					for (i = len; i && i > len - 3; buf[--i] = '.')
 						; /* NOP */
 

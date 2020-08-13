@@ -33,3 +33,13 @@ die(const char *fmt, ...) {
 
 	exit(1);
 }
+
+void
+infof(const char *fmt, ...) {
+  FILE* fp = fopen(LOGFILE, "a");
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(fp, fmt, ap);
+	va_end(ap);
+  fclose(fp);
+}

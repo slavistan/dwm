@@ -166,10 +166,6 @@ static void configure(Client *c);
 static void configurenotify(XEvent *e);
 static void configurerequest(XEvent *e);
 static Monitor *createmon(void);
-
-static void dbginfo(void);
-static void stringifyclient(const Client* c, char* buffer);
-
 static void destroynotify(XEvent *e);
 static void detach(Client *c);
 static void detachstack(Client *c);
@@ -190,6 +186,7 @@ static void grabkeys(void);
 static void incnmaster(const Arg *arg);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
+static void loginfo(const Arg *arg);
 static void manage(Window w, XWindowAttributes *wa);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
@@ -259,8 +256,8 @@ static const char broken[] = "broken";
 static char stext[256];      /* status text */
 static int screen;
 static int sw, sh;           /* X display screen geometry width, height */
-static int bh, blw = 0;      /* bar geometry */
-static int lrpad;            /* sum of left and right padding for text */
+static int bh, blw = 0;      /* bar geometry: blw = bar layout segment width */
+static int lrpad;            /* sum of left and right padding for tag text */
 static int (*xerrorxlib)(Display *, XErrorEvent *);
 static unsigned int numlockmask = 0;
 static void (*handler[LASTEvent]) (XEvent *) = {
@@ -456,6 +453,7 @@ attachstack(Client *c)
 void
 buttonpress(XEvent *e)
 {
+  infof("Button pressed ..");
 	unsigned int i, x, click;
 	Arg arg = {0};
 	Client *c;
@@ -477,12 +475,21 @@ buttonpress(XEvent *e)
 		if (i < LENGTH(tags)) {
 			click = ClkTagBar;
 			arg.ui = 1 << i;
-		} else if (ev->x < x + blw)
+      infof("tagbar\n");
+		} else if (ev->x < x + blw) {
 			click = ClkLtSymbol;
-		else if (ev->x > selmon->ww - TEXTW(stext))
+      infof("layoutsym\n");
+    }
+		else if (ev->x > selmon->ww - TEXTW(stext) + lrpad/2 - statusrpad) {
+      infof("status\n");
 			click = ClkStatusText;
-		else
+      arg.ui = ev->x - (selmon->ww - TEXTW(stext));
+      infof("arg.ui = %u\n", arg.ui);
+    }
+		else {
 			click = ClkWinTitle;
+      infof("wintitle\n");
+    }
 	} else if ((c = wintoclient(ev->window))) {
 		focus(c);
 		restack(selmon);
@@ -692,26 +699,6 @@ createmon(void)
 }
 
 void
-dbginfo(void)
-{
-  FILE* logf = fopen("/tmp/dwm-log", "a");
-  fprintf(logf, "stext = '%s'\n", stext);
-  fclose(logf);
-}
-
-void
-stringifyclient(const Client* c, char* buffer)
-{
-	sprintf(buffer,
-		"c:        %u\n"
-		"c->win:   %u\n"
-		"c->name:  %s\n"
-		"c->mon:   %u\n"
-		"c->next:  %u\n"
-		, c, c->win, c->name, c->mon, c->next);
-}
-
-void
 destroynotify(XEvent *e)
 {
 	Client *c;
@@ -777,8 +764,8 @@ drawbar(Monitor *m)
 	/* draw status first so it can be overdrawn by tags later */
 	if (m == selmon) { /* status is only drawn on selected monitor */
 		drw_setscheme(drw, scheme[SchemeNorm]);
-		sw = TEXTW(stext) - lrpad + 2; /* 2px right padding */
-		drw_text(drw, m->ww - sw, 0, sw, bh, 0, stext, 0);
+		sw = TEXTW(stext) - lrpad/2 + statusrpad;
+		drw_text(drw, m->ww - sw, 0, sw, bh, lrpad/2, stext, 0);
 	}
 
 	for (c = m->clients; c; c = c->next) {
@@ -1085,6 +1072,16 @@ killclient(const Arg *arg)
 		XSetErrorHandler(xerror);
 		XUngrabServer(dpy);
 	}
+}
+
+void
+loginfo(const Arg *arg)
+{
+  infof("TEXTW(stext) = %d\n", TEXTW(stext));
+  infof("TEXTW(x) = %d\n", TEXTW("x"));
+  infof("TEXTW(1) = %d\n", TEXTW("1"));
+  infof("TEXTW(\\1) = %d\n", TEXTW("\1"));
+  infof("lrpad = %d\n", lrpad);
 }
 
 void
@@ -2370,6 +2367,15 @@ zoom(const Arg *arg)
 int
 main(int argc, char *argv[])
 {
+//
+//  size_t ret;
+//  char str[16] = "A$";
+//  long u;
+//
+//  ret = utf8decode(str, &u, 6);
+//  printf("ret = %u, u = 0x%X\n", ret, u);
+//  return 1;
+//
 	if (argc == 2 && !strcmp("-v", argv[1]))
 		die("dwm-"VERSION);
 	else if (argc != 1)
@@ -2386,6 +2392,7 @@ main(int argc, char *argv[])
 #endif /* __OpenBSD__ */
 	scan();
 	runstartup();
+  loginfo(NULL);
 	run();
 	if(restart) execvp(argv[0], argv);
 	cleanup();
