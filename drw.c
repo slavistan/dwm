@@ -8,7 +8,6 @@
 #include "drw.h"
 #include "util.h"
 
-#define UTF_INVALID 0xFFFD
 #define UTF_SIZ     4
 
 static const unsigned char utfbyte[UTF_SIZ + 1] = {0x80,    0, 0xC0, 0xE0, 0xF0};
@@ -396,6 +395,32 @@ drw_fontset_getwidth(Drw *drw, const char *text)
 	if (!drw || !drw->fonts || !text)
 		return 0;
 	return drw_text(drw, 0, 0, 0, 0, 0, text, 0);
+}
+
+/*
+ * Retrieve utf8 info about glyph at pixel pos 'x' of a drawn string.
+ *
+ * Returns 0-based index of glyph at x-offset 'x'. Returns -1 if pixel pos
+ * is negative or too large. Returns -2 in case of invalid UTF-8.
+ */
+int
+drw_fontset_utf8decodeat(Drw* drw, const char *text, int x, long* u /* codepoint */)
+{
+  if (x < 0)
+    return -1;
+  char buf[256] = {0};
+  size_t ii, charlen, glyphidx, glyphw, accum;
+  for (ii = glyphidx = accum = 0; text[ii] != '\0'; ++glyphidx, ii += charlen) {
+    charlen = utf8decode(text + ii, u, 6);
+    if (*u == UTF_INVALID)
+      return -2;
+    strncpy(buf, text + ii, charlen);
+    glyphw = drw_fontset_getwidth(drw, buf);
+    accum += glyphw;
+    if (accum > x)
+      return glyphidx;
+  }
+  return -1;
 }
 
 void

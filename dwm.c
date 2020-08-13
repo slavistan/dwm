@@ -222,6 +222,7 @@ static void sigchld(int unused);
 static void sighup(int unused);
 static void sigterm(int unused);
 static void spawn(const Arg *arg);
+static void statusclk(const Arg *arg);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
 static void tile(Monitor *);
@@ -453,7 +454,6 @@ attachstack(Client *c)
 void
 buttonpress(XEvent *e)
 {
-  infof("Button pressed ..");
 	unsigned int i, x, click;
 	Arg arg = {0};
 	Client *c;
@@ -475,20 +475,18 @@ buttonpress(XEvent *e)
 		if (i < LENGTH(tags)) {
 			click = ClkTagBar;
 			arg.ui = 1 << i;
-      infof("tagbar\n");
 		} else if (ev->x < x + blw) {
 			click = ClkLtSymbol;
-      infof("layoutsym\n");
     }
 		else if (ev->x > selmon->ww - TEXTW(stext) + lrpad/2 - statusrpad) {
-      infof("status\n");
 			click = ClkStatusText;
-      arg.ui = ev->x - (selmon->ww - TEXTW(stext));
-      infof("arg.ui = %u\n", arg.ui);
+      int xpixel = ev->x - (selmon->ww - TEXTW(stext) + lrpad - statusrpad);
+      long u;
+      int glyphidx = drw_fontset_utf8decodeat(drw, stext, xpixel, &u);
+      arg.i = glyphidx;
     }
 		else {
 			click = ClkWinTitle;
-      infof("wintitle\n");
     }
 	} else if ((c = wintoclient(ev->window))) {
 		focus(c);
@@ -496,10 +494,24 @@ buttonpress(XEvent *e)
 		XAllowEvents(dpy, ReplayPointer, CurrentTime);
 		click = ClkClientWin;
 	}
-	for (i = 0; i < LENGTH(buttons); i++)
+  Arg *parg;
+	for (i = 0; i < LENGTH(buttons); i++) {
 		if (click == buttons[i].click && buttons[i].func && buttons[i].button == ev->button
-		&& CLEANMASK(buttons[i].mask) == CLEANMASK(ev->state))
-			buttons[i].func(click == ClkTagBar && buttons[i].arg.i == 0 ? &arg : &buttons[i].arg);
+		&& CLEANMASK(buttons[i].mask) == CLEANMASK(ev->state)) {
+      switch (click) {
+        case ClkTagBar:
+          parg = buttons[i].arg.i == 0 ? &arg : &buttons[i].arg;
+          break;
+        case ClkStatusText:
+          parg = &arg;
+          break;
+        default:
+          parg = &buttons[i].arg;
+          break;
+      }
+      buttons[i].func(parg);
+    }
+  }
 }
 
 void
@@ -1836,6 +1848,18 @@ spawn(const Arg *arg)
 }
 
 void
+statusclk(const Arg *arg)
+{
+  infof("arg->i = %d\n", arg->i);
+  char buf[16];
+  char cmdbuf[32];
+  sprintf(cmdbuf, "notify-send -- char %d", arg->i);
+  FILE *fp = popen(cmdbuf, "r");
+  fgets(buf, sizeof(buf), fp);
+  pclose(fp);
+}
+
+void
 tag(const Arg *arg)
 {
 	if (selmon->sel && arg->ui & TAGMASK) {
@@ -2367,15 +2391,6 @@ zoom(const Arg *arg)
 int
 main(int argc, char *argv[])
 {
-//
-//  size_t ret;
-//  char str[16] = "A$";
-//  long u;
-//
-//  ret = utf8decode(str, &u, 6);
-//  printf("ret = %u, u = 0x%X\n", ret, u);
-//  return 1;
-//
 	if (argc == 2 && !strcmp("-v", argv[1]))
 		die("dwm-"VERSION);
 	else if (argc != 1)
