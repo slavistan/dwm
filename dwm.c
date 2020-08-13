@@ -256,7 +256,7 @@ static void zoom(const Arg *arg);
 
 /* variables */
 static const char broken[] = "broken";
-static char stext[256];
+static char stext[256];      /* status text */
 static int screen;
 static int sw, sh;           /* X display screen geometry width, height */
 static int bh, blw = 0;      /* bar geometry */
@@ -694,21 +694,9 @@ createmon(void)
 void
 dbginfo(void)
 {
-	char buffer[1024];
-	Monitor* m;
-	Client* c;
-
-	for(m = mons; m; m = m->next) {
-		fprintf(stderr, "Monitor: %u", m);	
-		if (m == selmon)
-			fprintf(stderr, " (selected)");
-		fprintf(stderr, "\n");
-
-		for(c = m->clients; c; c = c->next) {
-			fprintf(stderr, "\tclient:  %u --> %u\n", c, c->next);
-		}	
-		fprintf(stderr, "\n");
-	}
+  FILE* logf = fopen("/tmp/dwm-log", "a");
+  fprintf(logf, "stext = '%s'\n", stext);
+  fclose(logf);
 }
 
 void

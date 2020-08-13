@@ -33,13 +33,15 @@ static const Rule rules[] = {
 	 *	WM_CLASS(STRING) = instance, class
 	 *	WM_NAME(STRING) = title
 	 */
-	/* class        , instance     , title , tags mask , isfloating , monitor , */
-	{ "Gimp"        , NULL         , NULL  , 0         , 1          , -1 }    ,
-	{ "Spacefm"     , NULL         , NULL  , 0         , 1          , -1 }    ,
-	{ "Yad"         , NULL         , NULL  , 0         , 1          , -1 }    ,
-  { "st-256color" , "st-float"   , NULL  , 0         , 1          , -1 }    ,
-  { "st-256color" , "st-wiki"    , NULL  , (1 << 8)  , 0          , -1 }    ,
-  { "Sxiv"        , "sxiv-float" , NULL  , 0         , 1          , -1 }    ,
+	/* class            , instance     , title , tags mask , isfloating , monitor , */
+	{ "Gimp"            , NULL         , NULL  , 0         , 1          , -1 }    ,
+	{ "Spacefm"         , NULL         , NULL  , 0         , 1          , -1 }    ,
+	{ "Yad"             , NULL         , NULL  , 0         , 1          , -1 }    ,
+  { "st-256color"     , "st-float"   , NULL  , 0         , 1          , -1 }    ,
+  { "st-256color"     , "st-wiki"    , NULL  , (1 << 8)  , 0          , -1 }    ,
+  { "Sxiv"            , "sxiv-float" , NULL  , 0         , 1          , -1 }    ,
+  { "Microsoft Teams" , NULL         , NULL  , (1 << 7)  , 0          , -1 }    ,
+  { "Firefox"         , NULL         , NULL  , (1 << 1)  , 0          , -1 }    ,
 };
 
 
@@ -72,37 +74,35 @@ static const char *dmenucmd[] = { "dmenu_run", "-m", dmenumon, "-fn", dmenufont,
 static const char *termcmd[]  = { "st", NULL };
 
 static Key keys[] = {
-	/* modifier                     key        function        argument */
-// 	{ MODKEY           , XK_Return , spawn          , {.v = termcmd } }    , // sxhkd
-	{ MODKEY           , XK_b      , togglebar      , {0} }                , // toggle bar
-	{ MODKEY           , XK_j      , focusstack     , {.i = +1 } }         , // navigate stack
-	{ MODKEY           , XK_k      , focusstack     , {.i = -1 } }         , // navigate stack
-	{ MODKEY|ShiftMask , XK_j      , moveclient     , {.i = +1 } }         , // navigate client within stack
-	{ MODKEY|ShiftMask , XK_k      , moveclient     , {.i = -1 } }         , // navigate client within stack
-	{ MODKEY           , XK_i      , incnmaster     , {.i = +1 } }         , // inc num of masters
-	{ MODKEY|ShiftMask , XK_i      , incnmaster     , {.i = -1 } }         , // dec num of masters
-	{ MODKEY|ShiftMask , XK_comma  , setmfact       , {.f = -0.05} }       , // dec master area
-	{ MODKEY|ShiftMask , XK_period , setmfact       , {.f = +0.05} }       , // inc master area
-	{ MODKEY|ShiftMask , XK_Return , zoom           , {0} }                , // raise to top of stack
-	{ MODKEY           , XK_Tab    , view           , {0} }                , // select previous tag
-	{ MODKEY           , XK_q      , killclient     , {0} }                ,
-	{ MODKEY           , XK_minus  , setcfact       , {.f = -0.25} }       ,
-	{ MODKEY|ShiftMask , XK_equal  , setcfact       , {.f = +0.25} }       ,
-	{ MODKEY           , XK_t      , setlayout      , {.v = &layouts[0]} } ,
-	{ MODKEY           , XK_f      , setlayout      , {.v = &layouts[1]} } ,
-	{ MODKEY           , XK_m      , setlayout      , {.v = &layouts[2]} } ,
-	{ MODKEY           , XK_space  , setlayout      , {0} }                ,
-	{ MODKEY|ShiftMask , XK_space  , togglefloating , {0} }                , // toggle float for client
-	{ MODKEY           , XK_0      , view           , {.ui = ~0 } }        , // view all tags
-	{ MODKEY|ShiftMask , XK_0      , tag            , {.ui = ~0 } }        , // tag client with all tags
-	{ MODKEY           , XK_l      , focusmon       , {.i = +1 } }         ,
-	{ MODKEY           , XK_h      , focusmon       , {.i = -1 } }         ,
-	{ MODKEY|ShiftMask , XK_l      , tagmon         , {.i = +1 } }         ,
-	{ MODKEY|ShiftMask , XK_h      , tagmon         , {.i = -1 } }         ,
-	{ MODKEY|ControlMask|ShiftMask , XK_equal      , setgaps         , {.i = +1 } }         ,
-	{ MODKEY|ControlMask , XK_minus      , setgaps         , {.i = -1 } }         ,
-
-	{ MODKEY|ShiftMask , XK_r      , quit           , {1}              }   , // reload dwm in-place
+	/* modifier                    , key       , function       , argument             , */
+	{ MODKEY                       , XK_b      , togglebar      , {0} }                , // toggle bar
+	{ MODKEY                       , XK_j      , focusstack     , {.i = +1 } }         , // navigate stack
+	{ MODKEY                       , XK_k      , focusstack     , {.i = -1 } }         , // navigate stack
+	{ MODKEY|ShiftMask             , XK_j      , moveclient     , {.i = +1 } }         , // navigate client within stack
+	{ MODKEY|ShiftMask             , XK_k      , moveclient     , {.i = -1 } }         , // navigate client within stack
+	{ MODKEY                       , XK_i      , incnmaster     , {.i = +1 } }         , // inc num of masters
+	{ MODKEY|ShiftMask             , XK_i      , incnmaster     , {.i = -1 } }         , // dec num of masters
+	{ MODKEY|ShiftMask             , XK_comma  , setmfact       , {.f = -0.05} }       , // dec master area
+	{ MODKEY|ShiftMask             , XK_period , setmfact       , {.f = +0.05} }       , // inc master area
+	{ MODKEY|ShiftMask             , XK_Return , zoom           , {0} }                , // raise to top of stack
+	{ MODKEY                       , XK_Tab    , view           , {0} }                , // select previous tag
+	{ MODKEY                       , XK_q      , killclient     , {0} }                ,
+	{ MODKEY                       , XK_minus  , setcfact       , {.f = -0.25} }       ,
+	{ MODKEY|ShiftMask             , XK_equal  , setcfact       , {.f = +0.25} }       ,
+	{ MODKEY                       , XK_t      , setlayout      , {.v = &layouts[0]} } ,
+	{ MODKEY                       , XK_f      , setlayout      , {.v = &layouts[1]} } ,
+	{ MODKEY                       , XK_m      , setlayout      , {.v = &layouts[2]} } ,
+	{ MODKEY                       , XK_space  , setlayout      , {0} }                ,
+	{ MODKEY|ShiftMask             , XK_space  , togglefloating , {0} }                , // toggle float for client
+	{ MODKEY                       , XK_0      , view           , {.ui = ~0 } }        , // view all tags
+	{ MODKEY|ShiftMask             , XK_0      , tag            , {.ui = ~0 } }        , // tag client with all tags
+	{ MODKEY                       , XK_l      , focusmon       , {.i = +1 } }         ,
+	{ MODKEY                       , XK_h      , focusmon       , {.i = -1 } }         ,
+	{ MODKEY|ShiftMask             , XK_l      , tagmon         , {.i = +1 } }         ,
+	{ MODKEY|ShiftMask             , XK_h      , tagmon         , {.i = -1 } }         ,
+	{ MODKEY|ControlMask|ShiftMask , XK_equal  , setgaps        , {.i = +1 } }         ,
+	{ MODKEY|ControlMask           , XK_minus  , setgaps        , {.i = -1 } }         ,
+	{ MODKEY|ShiftMask             , XK_r      , quit           , {1}              }   , // reload dwm in-place
 	TAGKEYS(                        XK_1,                      0)
 	TAGKEYS(                        XK_2,                      1)
 	TAGKEYS(                        XK_3,                      2)
@@ -121,6 +121,7 @@ static Button buttons[] = {
 	{ ClkLtSymbol,          0,              Button1,        setlayout,      {0} },
 	{ ClkLtSymbol,          0,              Button3,        setlayout,      {.v = &layouts[2]} },
 	{ ClkWinTitle,          0,              Button2,        zoom,           {0} },
+	{ ClkStatusText,        0,              Button1,        dbginfo,        {} },
 	{ ClkStatusText,        0,              Button2,        spawn,          {.v = termcmd } },
 	{ ClkClientWin,         MODKEY,         Button1,        movemouse,      {0} },
 	{ ClkClientWin,         MODKEY,         Button2,        togglefloating, {0} },
