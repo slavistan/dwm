@@ -483,7 +483,7 @@ buttonpress(XEvent *e)
       int xpixel = ev->x - (selmon->ww - TEXTW(stext) + lrpad - statusrpad);
       long u;
       int glyphidx = drw_fontset_utf8decodeat(drw, stext, xpixel, &u);
-      arg.i = glyphidx;
+      arg.i = (glyphidx & 0xFF); // TODO: make coupling of maxlen of stext explicit
     }
 		else {
 			click = ClkWinTitle;
@@ -504,6 +504,7 @@ buttonpress(XEvent *e)
           break;
         case ClkStatusText:
           /* TODO: Byte-encode button */
+          arg.i |= (buttons[i].button << 8);
           parg = &arg;
           break;
         default:
@@ -1851,12 +1852,20 @@ spawn(const Arg *arg)
 void
 statusclk(const Arg *arg)
 {
-  char buf[16];
-  char cmdbuf[32];
-  sprintf(cmdbuf, "dwmbricks kick --utf8index %d", arg->i);
-  FILE *fp = popen(cmdbuf, "r");
-  fgets(buf, sizeof(buf), fp);
-  pclose(fp);
+  static char env[16] = "BUTTON";
+  const unsigned mbutton = (arg->i >> 8);
+  const unsigned charidx = (arg->i & 0xFF);
+  sprintf(statuscmd_charidx, "%u", charidx);
+  sprintf(env, "BUTTON=%u", mbutton);
+  putenv(env);
+  spawn(statuscmd);
+  unsetenv("BUTTON");
+  // char buf[16];
+  // char cmdbuf[32];
+  // sprintf(cmdbuf, "dwmbricks kick --utf8index %d", arg->i);
+  // FILE *fp = popen(cmdbuf, "r");
+  // fgets(buf, sizeof(buf), fp);
+  // pclose(fp);
 }
 
 void
