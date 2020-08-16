@@ -494,7 +494,7 @@ buttonpress(XEvent *e)
 		XAllowEvents(dpy, ReplayPointer, CurrentTime);
 		click = ClkClientWin;
 	}
-  Arg *parg;
+  const Arg *parg;
 	for (i = 0; i < LENGTH(buttons); i++) {
 		if (click == buttons[i].click && buttons[i].func && buttons[i].button == ev->button
 		&& CLEANMASK(buttons[i].mask) == CLEANMASK(ev->state)) {
@@ -503,6 +503,7 @@ buttonpress(XEvent *e)
           parg = buttons[i].arg.i == 0 ? &arg : &buttons[i].arg;
           break;
         case ClkStatusText:
+          /* TODO: Byte-encode button */
           parg = &arg;
           break;
         default:
