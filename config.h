@@ -76,7 +76,7 @@ static const char *termcmd[]  = { "st", NULL };
 
 // TODO: Weave this into the status click command
 static char statuscmd_charidx[4] = "0"; /* buffer for index of clicked character, manipulated in statusclk() */
-static const char *statuscmd[] = { "dwmbricks kick --utf8index", statuscmd_charidx };
+static const char *statuscmd[] = { "dwmbricks",  "kick", "--utf8index", statuscmd_charidx, NULL };
 
 static Key keys[] = {
 	/* modifier                    , key       , function       , argument             , */
@@ -129,6 +129,8 @@ static Button buttons[] = {
 	{ ClkWinTitle   , 0          , Button2 , zoom           , {0} }                ,
 	{ ClkStatusText , 0          , Button2 , spawn          , {.v = termcmd } }    ,
 	{ ClkStatusText , 0          , Button1 , statusclk      , {0} }                ,
+	{ ClkStatusText , 0          , Button2 , statusclk      , {0} }                ,
+	{ ClkStatusText , 0          , Button3 , statusclk      , {0} }                ,
 	{ ClkClientWin  , MODKEY     , Button1 , movemouse      , {0} }                ,
 	{ ClkClientWin  , MODKEY     , Button2 , togglefloating , {0} }                ,
 	{ ClkClientWin  , MODKEY     , Button3 , resizemouse    , {0} }                ,

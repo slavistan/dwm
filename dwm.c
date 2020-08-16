@@ -1852,20 +1852,17 @@ spawn(const Arg *arg)
 void
 statusclk(const Arg *arg)
 {
-  static char env[16] = "BUTTON";
+  static char envbutton[4] = {0};
   const unsigned mbutton = (arg->i >> 8);
   const unsigned charidx = (arg->i & 0xFF);
+  infof("mbutton = %u, charidx = %u\n", mbutton, charidx);
+
   sprintf(statuscmd_charidx, "%u", charidx);
-  sprintf(env, "BUTTON=%u", mbutton);
-  putenv(env);
-  spawn(statuscmd);
+  sprintf(envbutton, "%u", mbutton);
+  setenv("BUTTON", envbutton, 1);
+  const Arg arg2 = { .v = statuscmd }; // TODO: cast-away. pass statuscmd to spawn
+  spawn(&arg2);
   unsetenv("BUTTON");
-  // char buf[16];
-  // char cmdbuf[32];
-  // sprintf(cmdbuf, "dwmbricks kick --utf8index %d", arg->i);
-  // FILE *fp = popen(cmdbuf, "r");
-  // fgets(buf, sizeof(buf), fp);
-  // pclose(fp);
 }
 
 void
