@@ -15,6 +15,13 @@ static const unsigned char utfmask[UTF_SIZ + 1] = {0xC0, 0x80, 0xE0, 0xF0, 0xF8}
 static const long utfmin[UTF_SIZ + 1] = {       0,    0,  0x80,  0x800,  0x10000};
 static const long utfmax[UTF_SIZ + 1] = {0x10FFFF, 0x7F, 0x7FF, 0xFFFF, 0x10FFFF};
 
+/*
+ * Decode a single UTF-8 byte.
+ *
+ * If c is a continuation byte, sets i=0 and returns the value of the data bits.
+ * If c is a leading byte, returns the value of the data bits and sets i to the
+ * number of bytes in the UTF-8 sequence. Sets i=5 for non-UTF-8 bytes.
+ */
 static long
 utf8decodebyte(const char c, size_t *i)
 {

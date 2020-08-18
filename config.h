@@ -75,8 +75,8 @@ static const char *dmenucmd[] = { "dmenu_run", "-m", dmenumon, "-fn", dmenufont,
 static const char *termcmd[]  = { "st", NULL };
 
 // TODO: Weave this into the status click command
-static char statuscmd_charidx[4] = "0"; /* buffer for index of clicked character, manipulated in statusclk() */
-static const char *statuscmd[] = { "dwmbricks",  "kick", "--utf8index", statuscmd_charidx, NULL };
+static char statuscmd_cindex[4] = "0"; /* buffer for index of clicked character, manipulated in statusclk() */
+static const char *statuscmd[] = { "dwmbricks",  "kick", "--charindex", statuscmd_charidx, NULL };
 
 static Key keys[] = {
 	/* modifier                    , key       , function       , argument             , */

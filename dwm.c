@@ -1854,10 +1854,9 @@ statusclk(const Arg *arg)
 {
   static char envbutton[4] = {0};
   const unsigned mbutton = (arg->i >> 8);
-  const unsigned charidx = (arg->i & 0xFF);
-  infof("mbutton = %u, charidx = %u\n", mbutton, charidx);
+  const unsigned cindex = (arg->i & 0xFF);
 
-  sprintf(statuscmd_charidx, "%u", charidx);
+  sprintf(statuscmd_cindex, "%u", cindex);
   sprintf(envbutton, "%u", mbutton);
   setenv("BUTTON", envbutton, 1);
   const Arg arg2 = { .v = statuscmd }; // TODO: cast-away. pass statuscmd to spawn
