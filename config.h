@@ -76,7 +76,7 @@ static const char *termcmd[]  = { "st", NULL };
 
 // TODO: Weave this into the status click command
 static char statuscmd_cindex[4] = "0"; /* buffer for index of clicked character, manipulated in statusclk() */
-static const char *statuscmd[] = { "dwmbricks",  "kick", "--charindex", statuscmd_charidx, NULL };
+static const char *statuscmd[] = { "dwmbricks",  "kick", "--charindex", statuscmd_cindex, NULL };
 
 static Key keys[] = {
 	/* modifier                    , key       , function       , argument             , */
