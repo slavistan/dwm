@@ -186,7 +186,6 @@ static void grabkeys(void);
 static void incnmaster(const Arg *arg);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
-static void loginfo(const Arg *arg);
 static void manage(Window w, XWindowAttributes *wa);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
@@ -222,7 +221,7 @@ static void sigchld(int unused);
 static void sighup(int unused);
 static void sigterm(int unused);
 static void spawn(const Arg *arg);
-static void statusclk(const Arg *arg);
+static void statusclick(const Arg *arg);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
 static void tile(Monitor *);
@@ -455,6 +454,7 @@ void
 buttonpress(XEvent *e)
 {
 	unsigned int i, x, click;
+  int at, cindex;
 	Arg arg = {0};
 	Client *c;
 	Monitor *m;
@@ -478,12 +478,11 @@ buttonpress(XEvent *e)
 		} else if (ev->x < x + blw) {
 			click = ClkLtSymbol;
     }
-		else if (ev->x > selmon->ww - TEXTW(stext) + lrpad/2 - statusrpad) {
-			click = ClkStatusText;
-      int xpixel = ev->x - (selmon->ww - TEXTW(stext) + lrpad - statusrpad);
-      long u;
-      int glyphidx = drw_fontset_utf8decodeat(drw, stext, xpixel, &u);
-      arg.i = (glyphidx & 0xFF); // TODO: make coupling of maxlen of stext explicit
+		else if ((at = ev->x - (selmon->ww - TEXTW(stext) + lrpad - statusrpad)) >= -lrpad/2) {
+      if (at >= 0 && (cindex = drw_fontset_utf8indexat(drw, stext, at)) >= 0) {
+        click = ClkStatusText;
+        arg.ui = cindex;
+      }
     }
 		else {
 			click = ClkWinTitle;
@@ -498,22 +497,22 @@ buttonpress(XEvent *e)
 	for (i = 0; i < LENGTH(buttons); i++) {
 		if (click == buttons[i].click && buttons[i].func && buttons[i].button == ev->button
 		&& CLEANMASK(buttons[i].mask) == CLEANMASK(ev->state)) {
-      switch (click) {
-        case ClkTagBar:
-          parg = buttons[i].arg.i == 0 ? &arg : &buttons[i].arg;
-          break;
-        case ClkStatusText:
-          /* TODO: Byte-encode button */
-          arg.i |= (buttons[i].button << 8);
-          parg = &arg;
-          break;
-        default:
-          parg = &buttons[i].arg;
-          break;
-      }
-      buttons[i].func(parg);
-    }
-  }
+			switch (click) {
+			case ClkStatusText:
+				/* encode button into the 3 most sig. bits */
+				arg.ui |= (buttons[i].button << (sizeof(unsigned) * CHAR_BIT - 3));
+				parg = &arg;
+				break;
+			case ClkTagBar:
+				parg = buttons[i].arg.i == 0 ? &arg : &buttons[i].arg;
+				break;
+			default:
+				parg = &buttons[i].arg;
+				break;
+			}
+			buttons[i].func(parg);
+		}
+	}
 }
 
 void
@@ -1086,16 +1085,6 @@ killclient(const Arg *arg)
 		XSetErrorHandler(xerror);
 		XUngrabServer(dpy);
 	}
-}
-
-void
-loginfo(const Arg *arg)
-{
-  infof("TEXTW(stext) = %d\n", TEXTW(stext));
-  infof("TEXTW(x) = %d\n", TEXTW("x"));
-  infof("TEXTW(1) = %d\n", TEXTW("1"));
-  infof("TEXTW(\\1) = %d\n", TEXTW("\1"));
-  infof("lrpad = %d\n", lrpad);
 }
 
 void
@@ -1850,18 +1839,18 @@ spawn(const Arg *arg)
 }
 
 void
-statusclk(const Arg *arg)
+statusclick(const Arg *arg)
 {
-  static char envbutton[4] = {0};
-  const unsigned mbutton = (arg->i >> 8);
-  const unsigned cindex = (arg->i & 0xFF);
+	const unsigned mbutton = arg->ui >> (sizeof(int) * CHAR_BIT - 3);
+	const unsigned cindex = ((arg->ui << 3) >> 3);
+	char envstr[] = "BUTTON=0";
 
-  sprintf(statuscmd_cindex, "%u", cindex);
-  sprintf(envbutton, "%u", mbutton);
-  setenv("BUTTON", envbutton, 1);
-  const Arg arg2 = { .v = statuscmd }; // TODO: cast-away. pass statuscmd to spawn
-  spawn(&arg2);
-  unsetenv("BUTTON");
+	envstr[7] = (char)(mbutton + 48);
+	putenv(envstr);
+	sprintf(statusclick_cindex, "%u", cindex);
+	const Arg arg2 = { .v = statusclick_cmd };
+	spawn(&arg2);
+	unsetenv("BUTTON");
 }
 
 void
@@ -2412,7 +2401,6 @@ main(int argc, char *argv[])
 #endif /* __OpenBSD__ */
 	scan();
 	runstartup();
-  loginfo(NULL);
 	run();
 	if(restart) execvp(argv[0], argv);
 	cleanup();

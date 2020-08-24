@@ -7,7 +7,7 @@ static const unsigned int gappx    = 15;       /* gaps between windows */
 static const unsigned int snap     = 32;       /* snap pixel */
 static const int showbar           = 1;        /* 0 means no bar */
 static const int topbar            = 1;        /* 0 means bottom bar */
-static const char *fonts[]         = { "monospace:size=10" };
+static const char *fonts[]         = { "LM Roman:size=10" };
 static const char dmenufont[]      = "monospace:size=10";
 static const char col_gray1[]      = "#222222";
 static const char col_gray2[]      = "#444444";
@@ -72,11 +72,9 @@ static const Layout layouts[] = {
 /* commands */
 static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() */
 static const char *dmenucmd[] = { "dmenu_run", "-m", dmenumon, "-fn", dmenufont, "-nb", col_gray1, "-nf", col_gray3, "-sb", col_cyan, "-sf", col_gray4, NULL };
-static const char *termcmd[]  = { "st", NULL };
 
-// TODO: Weave this into the status click command
-static char statuscmd_cindex[4] = "0"; /* buffer for index of clicked character, manipulated in statusclk() */
-static const char *statuscmd[] = { "dwmbricks",  "kick", "--charindex", statuscmd_cindex, NULL };
+static char statusclick_cindex[10] = "0"; /* buffer for index of clicked character, manipulated in statusclick() */
+static const char *statusclick_cmd[] = { "dwmbricks",  "kick", "--charindex", statusclick_cindex, NULL };
 
 static Key keys[] = {
 	/* modifier                    , key       , function       , argument             , */
@@ -103,34 +101,34 @@ static Key keys[] = {
 	{ MODKEY|ShiftMask             , XK_0      , tag            , {.ui = ~0 } }        , // tag client with all tags
 	{ MODKEY                       , XK_l      , focusmon       , {.i = +1 } }         ,
 	{ MODKEY                       , XK_h      , focusmon       , {.i = -1 } }         ,
-	{ MODKEY                       , XK_F1     , loginfo        , {0} }         ,
 	{ MODKEY|ShiftMask             , XK_l      , tagmon         , {.i = +1 } }         ,
 	{ MODKEY|ShiftMask             , XK_h      , tagmon         , {.i = -1 } }         ,
 	{ MODKEY|ControlMask|ShiftMask , XK_equal  , setgaps        , {.i = +1 } }         ,
 	{ MODKEY|ControlMask           , XK_minus  , setgaps        , {.i = -1 } }         ,
 	{ MODKEY|ShiftMask             , XK_r      , quit           , {1}              }   , // reload dwm in-place
-	TAGKEYS(                        XK_1,                      0)
-	TAGKEYS(                        XK_2,                      1)
-	TAGKEYS(                        XK_3,                      2)
-	TAGKEYS(                        XK_4,                      3)
-	TAGKEYS(                        XK_5,                      4)
-	TAGKEYS(                        XK_6,                      5)
-	TAGKEYS(                        XK_7,                      6)
-	TAGKEYS(                        XK_8,                      7)
-	TAGKEYS(                        XK_9,                      8)
+	TAGKEYS(XK_1, 0)
+	TAGKEYS(XK_2, 1)
+	TAGKEYS(XK_3, 2)
+	TAGKEYS(XK_4, 3)
+	TAGKEYS(XK_5, 4)
+	TAGKEYS(XK_6, 5)
+	TAGKEYS(XK_7, 6)
+	TAGKEYS(XK_8, 7)
+	TAGKEYS(XK_9, 8)
 };
 
 /* button definitions */
 /* click can be ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle, ClkClientWin, or ClkRootWin */
 static Button buttons[] = {
 	/* click        , event mask , button  , function       , argument */
+	{ ClkStatusText , 0          , Button1 , statusclick    , {0} }                ,
+	{ ClkStatusText , 0          , Button2 , statusclick    , {0} }                ,
+	{ ClkStatusText , 0          , Button3 , statusclick    , {0} }                ,
+	{ ClkStatusText , 0          , Button4 , statusclick    , {0} }                ,
+	{ ClkStatusText , 0          , Button5 , statusclick    , {0} }                ,
 	{ ClkLtSymbol   , 0          , Button1 , setlayout      , {0} }                ,
 	{ ClkLtSymbol   , 0          , Button3 , setlayout      , {.v = &layouts[2]} } ,
 	{ ClkWinTitle   , 0          , Button2 , zoom           , {0} }                ,
-	{ ClkStatusText , 0          , Button2 , spawn          , {.v = termcmd } }    ,
-	{ ClkStatusText , 0          , Button1 , statusclk      , {0} }                ,
-	{ ClkStatusText , 0          , Button2 , statusclk      , {0} }                ,
-	{ ClkStatusText , 0          , Button3 , statusclk      , {0} }                ,
 	{ ClkClientWin  , MODKEY     , Button1 , movemouse      , {0} }                ,
 	{ ClkClientWin  , MODKEY     , Button2 , togglefloating , {0} }                ,
 	{ ClkClientWin  , MODKEY     , Button3 , resizemouse    , {0} }                ,

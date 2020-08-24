@@ -405,29 +405,27 @@ drw_fontset_getwidth(Drw *drw, const char *text)
 }
 
 /*
- * Retrieve utf8 info about glyph at pixel pos 'x' of a drawn string.
- *
- * Returns 0-based index of glyph at x-offset 'x'. Returns -1 if pixel pos
+ * Returns 0-based index of glyph at x-offset 'at'. Returns -1 if pixel pos
  * is negative or too large. Returns -2 in case of invalid UTF-8.
  */
 int
-drw_fontset_utf8decodeat(Drw* drw, const char *text, int x, long* u /* codepoint */)
+drw_fontset_utf8indexat(Drw* drw, const char *text, int at)
 {
-  if (x < 0)
-    return -1;
-  char buf[256] = {0};
-  size_t ii, charlen, glyphidx, glyphw, accum;
-  for (ii = glyphidx = accum = 0; text[ii] != '\0'; ++glyphidx, ii += charlen) {
-    charlen = utf8decode(text + ii, u, 6);
-    if (*u == UTF_INVALID)
-      return -2;
-    strncpy(buf, text + ii, charlen);
-    glyphw = drw_fontset_getwidth(drw, buf);
-    accum += glyphw;
-    if (accum > x)
-      return glyphidx;
-  }
-  return -1;
+	size_t clen, cindex;
+	char buf[UTF_SIZ+1];
+	const char *p;
+
+	for (cindex = 0, p = text; *p != '\0'; cindex++, p += clen) {
+		utf8decodebyte(*p, &clen);
+		if (clen == 0 || clen > UTF_SIZ)
+			return -2; /* invalid utf */
+
+		memcpy(buf, p, clen);
+		buf[clen] = '\0';
+		if ((at -= drw_fontset_getwidth(drw, buf)) < 0)
+			return cindex;
+	}
+	return -1; /* out of bounds */
 }
 
 void
