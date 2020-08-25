@@ -1825,8 +1825,6 @@ sigterm(int unused)
 void
 spawn(const Arg *arg)
 {
-	if (arg->v == dmenucmd)
-		dmenumon[0] = '0' + selmon->num;
 	if (fork() == 0) {
 		if (dpy)
 			close(ConnectionNumber(dpy));
@@ -1841,16 +1839,13 @@ spawn(const Arg *arg)
 void
 statusclick(const Arg *arg)
 {
-	const unsigned mbutton = arg->ui >> (sizeof(int) * CHAR_BIT - 3);
+	const unsigned mbutton = arg->ui >> (sizeof(unsigned) * CHAR_BIT - 3);
 	const unsigned cindex = ((arg->ui << 3) >> 3);
-	char envstr[] = "BUTTON=0";
 
-	envstr[7] = (char)(mbutton + 48);
-	putenv(envstr);
 	sprintf(statusclick_cindex, "%u", cindex);
+	sprintf(statusclick_mbutton, "%u", mbutton);
 	const Arg arg2 = { .v = statusclick_cmd };
 	spawn(&arg2);
-	unsetenv("BUTTON");
 }
 
 void

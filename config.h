@@ -70,11 +70,9 @@ static const Layout layouts[] = {
 #define SHCMD(cmd) { .v = (const char*[]){ "/bin/sh", "-c", cmd, NULL } }
 
 /* commands */
-static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() */
-static const char *dmenucmd[] = { "dmenu_run", "-m", dmenumon, "-fn", dmenufont, "-nb", col_gray1, "-nf", col_gray3, "-sb", col_cyan, "-sf", col_gray4, NULL };
-
 static char statusclick_cindex[10] = "0"; /* buffer for index of clicked character, manipulated in statusclick() */
-static const char *statusclick_cmd[] = { "dwmbricks",  "kick", "--charindex", statusclick_cindex, NULL };
+static char statusclick_mbutton[10] = "0"; /* buffer for mouse button, manipulated in statusclick() */
+static const char *statusclick_cmd[] = { "dwmbricks",  "-c", statusclick_cindex, "-m", statusclick_mbutton, NULL };
 
 static Key keys[] = {
 	/* modifier                    , key       , function       , argument             , */
@@ -121,20 +119,21 @@ static Key keys[] = {
 /* click can be ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle, ClkClientWin, or ClkRootWin */
 static Button buttons[] = {
 	/* click        , event mask , button  , function       , argument */
-	{ ClkStatusText , 0          , Button1 , statusclick    , {0} }                ,
-	{ ClkStatusText , 0          , Button2 , statusclick    , {0} }                ,
-	{ ClkStatusText , 0          , Button3 , statusclick    , {0} }                ,
-	{ ClkStatusText , 0          , Button4 , statusclick    , {0} }                ,
-	{ ClkStatusText , 0          , Button5 , statusclick    , {0} }                ,
-	{ ClkLtSymbol   , 0          , Button1 , setlayout      , {0} }                ,
-	{ ClkLtSymbol   , 0          , Button3 , setlayout      , {.v = &layouts[2]} } ,
-	{ ClkWinTitle   , 0          , Button2 , zoom           , {0} }                ,
-	{ ClkClientWin  , MODKEY     , Button1 , movemouse      , {0} }                ,
-	{ ClkClientWin  , MODKEY     , Button2 , togglefloating , {0} }                ,
-	{ ClkClientWin  , MODKEY     , Button3 , resizemouse    , {0} }                ,
-	{ ClkTagBar     , 0          , Button1 , view           , {0} }                ,
-	{ ClkTagBar     , 0          , Button3 , toggleview     , {0} }                ,
-	{ ClkTagBar     , MODKEY     , Button1 , tag            , {0} }                ,
-	{ ClkTagBar     , MODKEY     , Button3 , toggletag      , {0} }                ,
+	{ ClkStatusText , 0      , Button1 , statusclick    , {0} }                      ,
+	{ ClkStatusText , 0      , Button2 , statusclick    , {0} }                      ,
+	{ ClkStatusText , 0      , Button3 , statusclick    , {0} }                      ,
+	{ ClkStatusText , 0      , Button4 , statusclick    , {0} }                      ,
+	{ ClkStatusText , 0      , Button5 , statusclick    , {0} }                      ,
+	{ ClkLtSymbol   , 0      , Button1 , setlayout      , {0} }                      ,
+	{ ClkLtSymbol   , 0      , Button3 , setlayout      , {.v = &layouts[2]} }       ,
+	{ ClkWinTitle   , 0      , Button2 , zoom           , {0} }                      ,
+	{ ClkClientWin  , MODKEY , Button1 , movemouse      , {0} }                      ,
+	{ ClkClientWin  , MODKEY , Button2 , togglefloating , {0} }                      ,
+	{ ClkClientWin  , MODKEY , Button3 , resizemouse    , {0} }                      ,
+	{ ClkTagBar     , 0      , Button1 , view           , {0} }                      ,
+	{ ClkTagBar     , 0      , Button3 , toggleview     , {0} }                      ,
+	{ ClkTagBar     , MODKEY , Button1 , tag            , {0} }                      ,
+	{ ClkTagBar     , MODKEY , Button3 , toggletag      , {0} }                      ,
+	{ ClkRootWin    , MODKEY , Button1 , spawn          , SHCMD("st || $TERMINAL") } ,
 };
 
