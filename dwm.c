@@ -1843,7 +1843,7 @@ statusclick(const Arg *arg)
 	const unsigned cindex = ((arg->ui << 3) >> 3);
 
 	sprintf(statusclick_cindex, "%u", cindex);
-	sprintf(statusclick_mbutton, "%u", mbutton);
+	sprintf(statusclick_envs, "BUTTON=%u", mbutton);
 	const Arg arg2 = { .v = statusclick_cmd };
 	spawn(&arg2);
 }

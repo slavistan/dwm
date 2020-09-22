@@ -70,9 +70,9 @@ static const Layout layouts[] = {
 #define SHCMD(cmd) { .v = (const char*[]){ "/bin/sh", "-c", cmd, NULL } }
 
 /* commands */
-static char statusclick_cindex[10] = "0"; /* buffer for index of clicked character, manipulated in statusclick() */
-static char statusclick_mbutton[10] = "0"; /* buffer for mouse button, manipulated in statusclick() */
-static const char *statusclick_cmd[] = { "dwmbricks",  "-c", statusclick_cindex, "-m", statusclick_mbutton, NULL };
+static char statusclick_cindex[10] = "\0"; /* buffer for index of clicked character, manipulated in statusclick() */
+static char statusclick_envs[12] = "\0"; /* buffer for mouse button, manipulated in statusclick() */
+static const char *statusclick_cmd[] = { "dwmbricks",  "-c", statusclick_cindex, "-e", statusclick_envs, NULL };
 
 static Key keys[] = {
 	/* modifier                    , key       , function       , argument             , */
