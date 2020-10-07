@@ -2402,3 +2402,12 @@ main(int argc, char *argv[])
 	XCloseDisplay(dpy);
 	return EXIT_SUCCESS;
 }
+
+// TODO(bug): Spurious tag changing from windows on another monitor
+//   An urgent window on another monitor causes a change in displayed tags
+//   on the currently active monitor.
+//   How to reproduce:
+//     1) Set a default monitor for an application (e.g. firefox)
+//     2) On one monitor launch the application with a delay 'sleep 5; firefox google.com'
+//     3) Switch to the other monitor and show any tag not associated with the application
+//     => After sleep returns the dwm will switch tags on _both_ monitors.
