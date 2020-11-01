@@ -853,6 +853,56 @@ expose(XEvent *e)
 		drawbar(m);
 }
 
+int
+fakesignal(void)
+{
+	char buf[32];
+  #define indicator "fsignal"
+	char rootname[sizeof(indicator) + 256];
+	ssize_t n;
+	char *p, *q;
+
+	/* Get root name, find the indicator  */
+	if (gettextprop(root, XA_WM_NAME, rootname, sizeof(rootname)) &&
+			!strncmp(indicator ":", rootname, sizeof(indicator))) {
+
+    /* Syntax:
+     *  1. INDICATOR:COMMAND
+     *  2. INDICATOR:COMMAND:VAL1:VAL2:...:VALN
+     */
+
+    /* Retrieve colon-sep'd command string */
+    if ((p = strchr(rootname + sizeof(indicator), ':')) == NULL)
+      p = rootname + strlen(rootname); // syntax 1
+    n = p - (rootname + sizeof(indicator));
+    if (sizeof(buf)-1 < n)
+      return 1; // buf too small
+    memcpy(buf, rootname + sizeof(indicator), n);
+    buf[n] = '\0';
+
+    /* Parse args and dispatch commands */
+    if (*p == ':' && !strcmp(buf, "swallow")) {
+      Window sucker, client;
+
+      sucker = strtoul(p+1, &q, 0);
+      if (*q != ':' || p+1 == q)
+        return 1; // invalid args
+      client = strtoul(q+1, &p, 0);
+      if (*p != '\0')
+        return 1; // invalid args
+
+      infof("sucker = %lu, client = %lu\n", sucker, client);
+    } else {
+      return 1; // invalid command signature
+    }
+
+    return 1;
+	}
+
+	/* No fake signal was sent, so proceed with update */
+	return 0;
+}
+
 void
 focus(Client *c)
 {
