@@ -876,7 +876,7 @@ fakesignal(void)
       p = rootname + strlen(rootname); // syntax 1
     n = p - (rootname + sizeof(indicator));
     if (sizeof(buf)-1 < n)
-      return 1; // buf too small
+      return 1;
     memcpy(buf, rootname + sizeof(indicator), n);
     buf[n] = '\0';
 
@@ -884,18 +884,17 @@ fakesignal(void)
     if (*p == ':' && !strcmp(buf, "swallow")) {
       Window sucker, client;
 
-      sucker = strtoul(p+1, &q, 0);
+      sucker = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
       if (*q != ':' || p+1 == q)
-        return 1; // invalid args
+        return 1;
       client = strtoul(q+1, &p, 0);
       if (*p != '\0')
-        return 1; // invalid args
+        return 1;
 
       infof("sucker = %lu, client = %lu\n", sucker, client);
     } else {
-      return 1; // invalid command signature
+      return 1;
     }
-
     return 1;
 	}
 
