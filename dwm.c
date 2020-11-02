@@ -727,8 +727,9 @@ destroynotify(XEvent *e)
 void
 detach(Client *c)
 {
-	Client **tc;
+	Client **tc; /* stores pointer to 'next' field of clients */
 
+	/* Find client whose 'next' points 'c' and link to 'c->next' instead. */
 	for (tc = &c->mon->clients; *tc && *tc != c; tc = &(*tc)->next);
 	*tc = c->next;
 }
