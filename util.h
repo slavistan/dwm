@@ -8,10 +8,11 @@
 #define BETWEEN(X, A, B)        ((A) <= (X) && (X) <= (B))
 
 extern char logfilepath[];
+extern Display *dpy;
 
 void die(const char *fmt, ...);
 void infof(const char *fmt, ...);
 void *ecalloc(size_t nmemb, size_t size);
 
 size_t strnfy_client(char* str, size_t size, const Client*);
-void logclient(const Client*);
+void logclient(const Client*, int verbosity);

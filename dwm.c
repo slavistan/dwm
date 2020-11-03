@@ -20,27 +20,6 @@
  *
  * To understand everything else, start reading main().
  */
-#include <errno.h>
-#include <locale.h>
-#include <signal.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <X11/cursorfont.h>
-#include <X11/keysym.h>
-#include <X11/Xatom.h>
-#include <X11/Xlib.h>
-#include <X11/Xproto.h>
-#include <X11/Xutil.h>
-#ifdef XINERAMA
-#include <X11/extensions/Xinerama.h>
-#endif /* XINERAMA */
-#include <X11/Xft/Xft.h>
-
 #include "dwm.h"
 #include "drw.h"
 #include "util.h"
@@ -267,7 +246,7 @@ static int restart = 0;
 static int running = 1;
 static Cur *cursor[CurLast];
 static Clr **scheme;
-static Display *dpy; /* Display (?!) */
+Display *dpy; /* Display (?!) */
 static Drw *drw;
 static Monitor *mons, *selmon; /* monitor list, selected monitor */
 static Window root, wmcheckwin;
@@ -585,6 +564,9 @@ clientmessage(XEvent *e)
 	}
 }
 
+/*
+ * Inform client window about it's (new) geometry [right?]
+ */
 void
 configure(Client *c)
 {
@@ -755,6 +737,7 @@ detachstack(Client *c)
 	for (tc = &c->mon->stack; *tc && *tc != c; tc = &(*tc)->snext);
 	*tc = c->snext;
 
+	/* If 'c' is the selected client change focus to another [yes?] */
 	if (c == c->mon->sel) {
 		for (t = c->mon->stack; t && !ISVISIBLE(t); t = t->snext);
 		c->mon->sel = t;
@@ -870,7 +853,6 @@ expose(XEvent *e)
 int
 fakesignal(void)
 {
-  infof("fakesignal(): ");
 	char buf[32];
   #define indicator "fsignal"
 	char rootname[sizeof(indicator) + 256];
@@ -990,25 +972,36 @@ focusstack(const Arg *arg)
 {
 	Client *c = NULL, *i;
 
-	if (!selmon->sel)
+  infof("focusstack(): ");
+	if (!selmon->sel) {
+    infof("no sel\n");
 		return;
+  }
+
 	if (arg->i > 0) {
+    infof("↓ ");
 		for (c = selmon->sel->next; c && !ISVISIBLE(c); c = c->next);
 		if (!c)
 			for (c = selmon->clients; c && !ISVISIBLE(c); c = c->next);
 	} else {
-		for (i = selmon->clients; i != selmon->sel; i = i->next)
+    infof("↑ ");
+		for (i = selmon->clients; i != selmon->sel; i = i->next) {
 			if (ISVISIBLE(i))
 				c = i;
+		}
 		if (!c)
 			for (; i; i = i->next)
 				if (ISVISIBLE(i))
 					c = i;
 	}
 	if (c) {
+    infof("found client ");
+    logclient(c, 0);
+    infof("\n");
 		focus(c);
 		restack(selmon);
 	}
+  infof("\n");
 }
 
 Atom
@@ -1582,11 +1575,12 @@ restack(Monitor *m)
 	if (m->lt[m->sellt]->arrange) {
 		wc.stack_mode = Below;
 		wc.sibling = m->barwin;
-		for (c = m->stack; c; c = c->snext)
+		for (c = m->stack; c; c = c->snext) {
 			if (!c->isfloating && ISVISIBLE(c)) {
 				XConfigureWindow(dpy, c->win, CWSibling|CWStackMode, &wc);
 				wc.sibling = c->win;
 			}
+		}
 	}
 	XSync(dpy, False);
 	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
@@ -1950,8 +1944,10 @@ statusclick(const Arg *arg)
 void
 swallow(Client *c, Client *other)
 {
-  return;
-  infof("swallow()\n");
+  infof("swallow(): c = ");
+  logclient(c, 0);
+  infof(", other = ");
+  logclient(other, 0);
   /* no multiple or nested swallowing. */
   // TODO: Inhibit or implement n-1 swallowing
 //	if (!c || !other || c->swallowing == NULL || other->swallowing == NULL)
@@ -1961,23 +1957,31 @@ swallow(Client *c, Client *other)
 	detach(other);
 	detachstack(other);
 
+  /* swap other with c in c's client list */
+  Client **tc;
+  other->next = c->next;
+  for (tc = &c->mon->clients; *tc && *tc != c; tc = &(*tc)->next);
+  *tc = other;
+
+  for (tc = &c->mon->stack; *tc && *tc != c; tc = &(*tc)->snext);
+  *tc = other;
+
 	other->mon = c->mon;
 	other->swallowedby = c;
 	XMoveResizeWindow(dpy, other->win, c->x, c->y, c->w, c->h);
 
-  /* swap in other */
-  Client **tc;
-  other->next = c->next;
-	for (tc = &c->mon->clients; *tc && *tc != c; tc = &(*tc)->next);
-  *tc = other;
+  /* Unmap the window. Note that the subsequent UnmapNotify event will not do
+   * anything to our swallowing client c as it's not in the linked list anymore.
+   * We may retrieve it later on. */
+  XUnmapWindow(dpy, c->win);
 
-  detachstack(c);
-
+  // TODO: redraw other's monitor
 
 	arrange(other->mon);
 	configure(other);
 	updateclientlist();
 
+  XSync(dpy, False);
 //	setclientstate(other, WithdrawnState); // Why withdraw 'other'?
 //	XUnmapWindow(dpy, c->win);
 
@@ -1991,6 +1995,8 @@ swallow(Client *c, Client *other)
 //	arrange(c->mon);
 //	configure(c);
 //	updateclientlist();
+
+  infof("\n");
 }
 
 void
@@ -2018,7 +2024,9 @@ tagmon(const Arg *arg)
 	restack(c->mon); /* required for focus(c) to work */
 }
 
-/* Apply tiling layout */
+/*
+ * Apply tiling layout. Update clients' geometry parameters
+ */
 void
 tile(Monitor *m)
 {
@@ -2154,13 +2162,19 @@ unmapnotify(XEvent *e)
 	Client *c;
 	XUnmapEvent *ev = &e->xunmap;
 
+  infof("unmapnotify(): ");
+
 	if ((c = wintoclient(ev->window))) {
+    infof("client %p, ", c);
 		if (ev->send_event) {
+      infof("withdrawing");
 			setclientstate(c, WithdrawnState);
 		}
 		else
+      infof("unmanaging");
 			unmanage(c, 0);
 	}
+  infof("\n");
 }
 
 void

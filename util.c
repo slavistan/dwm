@@ -84,16 +84,29 @@ strnfy_client(char* str, size_t size, const Client *c) {
 }
 
 void
-logclient(const Client *c) {
+logclient(const Client *c, int verbosity) {
 
   if (!c)
     return;
 
-  char buf[1024];
-  strnfy_client(buf, sizeof(buf), c);
+  switch (verbosity) {
+    case 0: { /* win id & name */
+      XTextProperty text;
+      XGetClassHint(dpy, c->win, &text);
+      infof("%p [%s]", c, text.value);
+      XFree(text.value);
+      break;
+    }
 
-  FILE* fp = fopen(logfilepath, "a");
-	fprintf(fp, "%s", buf);
-  fclose(fp);
+    default: { /* full info */
+      char buf[1024];
+      strnfy_client(buf, sizeof(buf), c);
+
+      FILE* fp = fopen(logfilepath, "a");
+      fprintf(fp, "%s", buf);
+      fclose(fp);
+      break;
+    }
+  }
 }
 

@@ -10,7 +10,8 @@ build_and_launch() {
   # give xephyr time to start up
   Xephyr -br -ac -noreset -resizeable :1 &
   pid=$!
-  while ! DISPLAY=:1 ./dwm && kill -0 $pid; do
+  export DISPLAY=":1"
+  while ! ./dwm && kill -0 $pid; do
     sleep 0.1
   done
 }
