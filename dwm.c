@@ -41,6 +41,7 @@
 #endif /* XINERAMA */
 #include <X11/Xft/Xft.h>
 
+#include "dwm.h"
 #include "drw.h"
 #include "util.h"
 
@@ -88,24 +89,6 @@ typedef struct {
 	const Arg arg;
 } Button;
 
-typedef struct Monitor Monitor;
-typedef struct Client Client;
-struct Client {
-	char name[256];
-	float mina, maxa;
-    float cfact;
-	int x, y, w, h;
-	int oldx, oldy, oldw, oldh;
-	int basew, baseh, incw, inch, maxw, maxh, minw, minh;
-	int bw, oldbw;
-	unsigned int tags;
-	int isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen;
-	Client *next; /* next client in list */
-	Client *snext; /* next client in focus stack */
-	Monitor *mon; /* monitor for this client */
-	Window win; /* window id */
-};
-
 typedef struct {
 	unsigned int mod;
 	KeySym keysym;
@@ -119,16 +102,16 @@ typedef struct {
 } Layout;
 
 struct Monitor {
-	char ltsymbol[16];
-	float mfact; 		  /* relative size of master area [0, 1] */
-	int nmaster;
+	char ltsymbol[16]; /* layout symbol string show in bar */
+	float mfact; /* relative size of master area [0, 1] */
+	int nmaster; /* num of windows in master area (relevant for tiling layout) */
 	int num;
 	int by;               /* bar geometry */
 	int mx, my, mw, mh;   /* screen size */
-	int wx, wy, ww, wh;   /* window area  */
-  	int gappx;            /* gaps between windows */
-	unsigned int seltags;
-	unsigned int sellt;
+	int wx, wy, ww, wh;   /* window area */
+	int gappx;            /* gaps between windows */
+	unsigned int seltags; /* selected tags */
+	unsigned int sellt;   /* selected layout */
 	unsigned int tagset[2];
 	int showbar;
 	int topbar;
@@ -136,7 +119,7 @@ struct Monitor {
 	Client *sel;     /* active client */
 	Client *stack;   /* focus stack */
 	Monitor *next;
-	Window barwin;
+	Window barwin; /* Window handle of the monitor's status bar */
 	const Layout *lt[2];
 };
 
@@ -174,6 +157,7 @@ static void drawbar(Monitor *m);
 static void drawbars(void);
 static void enternotify(XEvent *e);
 static void expose(XEvent *e);
+static int fakesignal(void);
 static void focus(Client *c);
 static void focusin(XEvent *e);
 static void focusmon(const Arg *arg);
@@ -222,6 +206,7 @@ static void sighup(int unused);
 static void sigterm(int unused);
 static void spawn(const Arg *arg);
 static void statusclick(const Arg *arg);
+static void swallow(Client*, Client*);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
 static void tile(Monitor *);
@@ -232,6 +217,7 @@ static void toggleview(const Arg *arg);
 static void unfocus(Client *c, int setfocus);
 static void unmanage(Client *c, int destroyed);
 static void unmapnotify(XEvent *e);
+static void unswallow(Client *c);
 static void updatebarpos(Monitor *m);
 static void updatebars(void);
 static void updateclientlist(void);
@@ -252,7 +238,7 @@ static void xinitvisual();
 static void zoom(const Arg *arg);
 
 /* variables */
-static const char broken[] = "broken";
+static const char broken[] = "broken"; /* name for broken (?!) clients */
 static char stext[256];      /* status text */
 static int screen;
 static int sw, sh;           /* X display screen geometry width, height */
@@ -281,15 +267,17 @@ static int restart = 0;
 static int running = 1;
 static Cur *cursor[CurLast];
 static Clr **scheme;
-static Display *dpy;
+static Display *dpy; /* Display (?!) */
 static Drw *drw;
-static Monitor *mons, *selmon;
+static Monitor *mons, *selmon; /* monitor list, selected monitor */
 static Window root, wmcheckwin;
 
 static int useargb = 0;
 static Visual *visual;
 static int depth;
 static Colormap cmap;
+
+char logfilepath[128];
 
 /* configuration, allows nested code to access above variables */
 #include "config.h"
@@ -422,6 +410,9 @@ arrangemon(Monitor *m)
 		m->lt[m->sellt]->arrange(m);
 }
 
+/*
+ * Attach client at the front of its monitor's client list
+ */
 void
 attach(Client *c)
 {
@@ -610,7 +601,7 @@ configure(Client *c)
 	ce.border_width = c->bw;
 	ce.above = None;
 	ce.override_redirect = False;
-	XSendEvent(dpy, c->win, False, StructureNotifyMask, (XEvent *)&ce);
+	XSendEvent(dpy, c->win, False, StructureNotifyMask, (XEvent *)&ce); // async, right?
 }
 
 void
@@ -650,8 +641,15 @@ configurerequest(XEvent *e)
 	XWindowChanges wc;
 
 	if ((c = wintoclient(ev->window))) {
+    // ?? What makes changing the border width exclusive? Why are possible
+    //    other changes ignored if bw is set? Also, does this ever do anything
+    //    to X?
 		if (ev->value_mask & CWBorderWidth)
 			c->bw = ev->border_width;
+
+		/* If either the window is floating or the current layout does not come
+		 * with an arrange function update the client's geometry fields. The
+		 * 'value_mask' indicates which geometric settings are to be updated. */
 		else if (c->isfloating || !selmon->lt[selmon->sellt]->arrange) {
 			m = c->mon;
 			if (ev->value_mask & CWX) {
@@ -670,17 +668,29 @@ configurerequest(XEvent *e)
 				c->oldh = c->h;
 				c->h = ev->height;
 			}
+
+			/* Keep the window within the confines of the parent. Snaps back to center. */
 			if ((c->x + c->w) > m->mx + m->mw && c->isfloating)
 				c->x = m->mx + (m->mw / 2 - WIDTH(c) / 2); /* center in x direction */
 			if ((c->y + c->h) > m->my + m->mh && c->isfloating)
 				c->y = m->my + (m->mh / 2 - HEIGHT(c) / 2); /* center in y direction */
+
+      // ?? What's special about moving a window vs. changin its size?
 			if ((ev->value_mask & (CWX|CWY)) && !(ev->value_mask & (CWWidth|CWHeight)))
 				configure(c);
+
+			/* Move only windows which are in the selected tagset. When changing the tag
+			 * everything will be redrawn anyway. */
 			if (ISVISIBLE(c))
 				XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
-		} else
-			configure(c);
-	} else {
+		}
+		else
+			configure(c); // Let the client know that nothing happend?
+	}
+	/* No client exists which corresponds to the event's window, in which case
+	 * forward the request verbatim to X. Presumably, this is only the case for
+   * unmapped windows (whose map request will create a corresponding client). */
+	else {
 		wc.x = ev->x;
 		wc.y = ev->y;
 		wc.width = ev->width;
@@ -734,6 +744,9 @@ detach(Client *c)
 	*tc = c->next;
 }
 
+/*
+ * Remove client from its monitor's focus list
+ */
 void
 detachstack(Client *c)
 {
@@ -857,6 +870,7 @@ expose(XEvent *e)
 int
 fakesignal(void)
 {
+  infof("fakesignal(): ");
 	char buf[32];
   #define indicator "fsignal"
 	char rootname[sizeof(indicator) + 256];
@@ -867,7 +881,8 @@ fakesignal(void)
 	if (gettextprop(root, XA_WM_NAME, rootname, sizeof(rootname)) &&
 			!strncmp(indicator ":", rootname, sizeof(indicator))) {
 
-    /* Syntax:
+    /*
+     * Syntax:
      *  1. INDICATOR:COMMAND
      *  2. INDICATOR:COMMAND:VAL1:VAL2:...:VALN
      */
@@ -883,18 +898,36 @@ fakesignal(void)
 
     /* Parse args and dispatch commands */
     if (*p == ':' && !strcmp(buf, "swallow")) {
-      Window sucker, client;
+      Window winclient, winother;
+      Client *c, *o;
 
-      sucker = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
+      winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
       if (*q != ':' || p+1 == q)
         return 1;
-      client = strtoul(q+1, &p, 0);
+      winother = strtoul(q+1, &p, 0);
       if (*p != '\0')
         return 1;
 
-      infof("sucker = %lu, client = %lu\n", sucker, client);
-    } else {
-      return 1;
+      if(winother == winclient ||
+         (c = wintoclient(winclient)) == NULL ||
+         (o = wintoclient(winother)) == NULL) {
+        return 1;
+      }
+
+      swallow(c, o);
+    } else if (*p == ':' && !strcmp(buf, "unswallow")) {
+      Window winclient;
+      Client *cc;
+
+      winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
+      if (*q != '\0' || p+1 == q)
+        return 1;
+
+      if ((cc = wintoclient(winclient)) == NULL)
+        return 1;
+
+      infof("unswallow client = %lu\n", winclient);
+      unswallow(cc);
     }
     return 1;
 	}
@@ -1022,6 +1055,9 @@ getstate(Window w)
 	return result;
 }
 
+/*
+ * Write 'w'indow property 'atom' to 'text' (limited to 'size' chars).
+ */
 int
 gettextprop(Window w, Atom atom, char *text, unsigned int size)
 {
@@ -1224,6 +1260,9 @@ maprequest(XEvent *e)
 		manage(ev->window, &wa);
 }
 
+/*
+ * Apply monocle layout
+ */
 void
 monocle(Monitor *m)
 {
@@ -1394,8 +1433,12 @@ propertynotify(XEvent *e)
 	Window trans;
 	XPropertyEvent *ev = &e->xproperty;
 
-	if ((ev->window == root) && (ev->atom == XA_WM_NAME))
-		updatestatus();
+	/* update status (unless a fake signal was received) */
+	if ((ev->window == root) && (ev->atom == XA_WM_NAME)) {
+		if (!fakesignal())
+			updatestatus();
+	}
+
 	else if (ev->state == PropertyDelete)
 		return; /* ignore */
 	else if ((c = wintoclient(ev->window))) {
@@ -1901,6 +1944,55 @@ statusclick(const Arg *arg)
 	spawn(&arg2);
 }
 
+/*
+ * TODO: rename to swallow
+ */
+void
+swallow(Client *c, Client *other)
+{
+  return;
+  infof("swallow()\n");
+  /* no multiple or nested swallowing. */
+  // TODO: Inhibit or implement n-1 swallowing
+//	if (!c || !other || c->swallowing == NULL || other->swallowing == NULL)
+//		return;
+
+	/* Remove 'other' from its current client and focus lists */
+	detach(other);
+	detachstack(other);
+
+	other->mon = c->mon;
+	other->swallowedby = c;
+	XMoveResizeWindow(dpy, other->win, c->x, c->y, c->w, c->h);
+
+  /* swap in other */
+  Client **tc;
+  other->next = c->next;
+	for (tc = &c->mon->clients; *tc && *tc != c; tc = &(*tc)->next);
+  *tc = other;
+
+  detachstack(c);
+
+
+	arrange(other->mon);
+	configure(other);
+	updateclientlist();
+
+//	setclientstate(other, WithdrawnState); // Why withdraw 'other'?
+//	XUnmapWindow(dpy, c->win);
+
+//	/* swap windows of p and c */
+//	Window w = c->win;
+//	c->win = other->win;
+//	other->win = w;
+
+//	updatetitle(c);
+//	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
+//	arrange(c->mon);
+//	configure(c);
+//	updateclientlist();
+}
+
 void
 tag(const Arg *arg)
 {
@@ -1926,6 +2018,7 @@ tagmon(const Arg *arg)
 	restack(c->mon); /* required for focus(c) to work */
 }
 
+/* Apply tiling layout */
 void
 tile(Monitor *m)
 {
@@ -2032,12 +2125,16 @@ unmanage(Client *c, int destroyed)
 	Monitor *m = c->mon;
 	XWindowChanges wc;
 
+	/* Remove client from lists */
 	detach(c);
 	detachstack(c);
+
 	if (!destroyed) {
 		wc.border_width = c->oldbw;
 		XGrabServer(dpy); /* avoid race conditions */
 		XSetErrorHandler(xerrordummy);
+
+    // Why restore the border? And why not use XSetWindowBorderWidth() directly?
 		XConfigureWindow(dpy, c->win, CWBorderWidth, &wc); /* restore border */
 		XUngrabButton(dpy, AnyButton, AnyModifier, c->win);
 		setclientstate(c, WithdrawnState);
@@ -2058,12 +2155,37 @@ unmapnotify(XEvent *e)
 	XUnmapEvent *ev = &e->xunmap;
 
 	if ((c = wintoclient(ev->window))) {
-		if (ev->send_event)
+		if (ev->send_event) {
 			setclientstate(c, WithdrawnState);
+		}
 		else
 			unmanage(c, 0);
 	}
 }
+
+void
+unswallow(Client *c)
+{
+  if (!c)
+    return;
+
+	c->win = c->swallowedby->win;
+
+	free(c->swallowedby);
+	c->swallowedby = NULL;
+
+
+	/* unfullscreen the client */
+	setfullscreen(c, 0);
+	updatetitle(c);
+	arrange(c->mon);
+	XMapWindow(dpy, c->win);
+	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
+	setclientstate(c, NormalState);
+	focus(NULL);
+	arrange(c->mon);
+}
+
 
 void
 updatebars(void)
@@ -2433,6 +2555,13 @@ zoom(const Arg *arg)
 int
 main(int argc, char *argv[])
 {
+/* Init logging */
+	char *p;
+	if ((p = getenv("DISPLAY")) != NULL && strlen(p) >= 2 && p[0] == ':')
+		sprintf(logfilepath, LOGFILE_TEMPLATE, p+1);
+	else
+		sprintf(logfilepath, LOGFILE_TEMPLATE, "unknown-display");
+
 	if (argc == 2 && !strcmp("-v", argv[1]))
 		die("dwm-"VERSION);
 	else if (argc != 1)

@@ -134,6 +134,8 @@ static Button buttons[] = {
 	{ ClkTagBar     , 0      , Button3 , toggleview     , {0} }                      ,
 	{ ClkTagBar     , MODKEY , Button1 , tag            , {0} }                      ,
 	{ ClkTagBar     , MODKEY , Button3 , toggletag      , {0} }                      ,
-	{ ClkRootWin    , MODKEY , Button1 , spawn          , SHCMD("st || $TERMINAL") } ,
+	{ ClkRootWin    , 0      , Button1 , spawn          , SHCMD("st || $TERMINAL") } ,
 };
 
+/* Daemon's pid-file's full path. '%s' will be replaced by the $DISPLAY minus the colon */
+#define LOGFILE_TEMPLATE "/tmp/dwmlog-%s"

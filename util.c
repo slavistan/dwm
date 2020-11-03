@@ -36,10 +36,64 @@ die(const char *fmt, ...) {
 
 void
 infof(const char *fmt, ...) {
-  FILE* fp = fopen(LOGFILE, "a");
+	FILE* fp;
 	va_list ap;
+
+	if ((fp = fopen(logfilepath, "a")) == NULL)
+		die("fopen() failed:");
 	va_start(ap, fmt);
 	vfprintf(fp, fmt, ap);
 	va_end(ap);
   fclose(fp);
 }
+
+/* Stringify a client */
+size_t
+strnfy_client(char* str, size_t size, const Client *c) {
+
+  return snprintf(str, size,
+      "Client 0x%p = {\n"
+      "  name = '%s'\n"
+      "  (mina, maxa) = (%f, %f)\n"
+      "  cfact = %f\n"
+      "  (x, y, w, h) = (%d, %d, %d, %d)\n"
+      "  (oldx, oldy, oldw, oldh) = (%d, %d, %d, %d)\n"
+      "  (basew, baseh, incw, inch, maxw, maxh, minw, minh) = (%d, %d, %d, %d, %d, %d, %d, %d)\n"
+      "  (bw, oldbw) = (%d, %d)\n"
+      "  tags = %u\n"
+      "  (isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen) = (%d, %d, %d, %d, %d, %d)\n"
+      "  next = 0x%p\n"
+      "  snext = 0x%p\n"
+      "  mon = 0x%p\n"
+      "  win = %lu\n"
+      "}\n"
+      , (void*)c,
+        c->name,
+        c->mina, c->maxa,
+        c->cfact,
+        c->x, c->y, c->w, c->h,
+        c->oldx, c->oldy, c->oldw, c->oldh,
+        c->basew, c->baseh, c->incw, c->inch, c->maxw, c->maxh, c->minw, c->minh,
+        c->bw, c->oldbw,
+        c->tags,
+        c->isfixed, c->isfloating, c->isurgent, c->neverfocus, c->oldstate, c->isfullscreen,
+        (void*)c->next,
+        (void*)c->snext,
+        (void*)c->mon,
+        c->win);
+}
+
+void
+logclient(const Client *c) {
+
+  if (!c)
+    return;
+
+  char buf[1024];
+  strnfy_client(buf, sizeof(buf), c);
+
+  FILE* fp = fopen(logfilepath, "a");
+	fprintf(fp, "%s", buf);
+  fclose(fp);
+}
+
