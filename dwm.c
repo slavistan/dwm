@@ -2010,24 +2010,27 @@ swallow(Client *c, Client *other)
   infof(", other = ");
   logclient(other, 0);
 
+  Client *q;
   Client **tc;
   Monitor *m;
   Window w;
 
   /* no multiple or nested swallowing. */
   // TODO: Inhibit or implement n-1 swallowing
-	if (!c || !other || c->swallowing == NULL || other->swallowing == NULL)
+	if (!c || !other || c->swallowing || other->swallowing) {
 		return;
+  }
 
 	/* Remove 'other' from its current client and focus lists and save its address */
 	detach(other);
 	detachstack(other);
+	c->swallowing = other;
 
+  /* Update monitors */
   if (other->mon != c->mon) {
     arrange(other->mon);
     other->mon = c->mon;
   }
-	c->swallowing = other;
 
   /* Swap windows */
   w = other->win;
@@ -2041,8 +2044,11 @@ swallow(Client *c, Client *other)
 
 	/* Redraw everything */
 	updatetitle(c);
+	focus(NULL);
 	arrange(c->mon);
-	configure(c);
+
+  /* Some windows require this (e.g. evince). Buy why?  */
+	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
 	XSync(dpy, False);
 
   /* Note: We don't call updateclientlist() which would remove the hidden clients window from
@@ -2180,9 +2186,29 @@ unfocus(Client *c, int setfocus)
 void
 unmanage(Client *c, int destroyed)
 {
-	Monitor *m = c->mon;
+  Client *q;
+	Monitor *m;
 	XWindowChanges wc;
+  Window w;
 
+  infof("unmanage(): client ");
+  logclient(c, 0);
+  infof(", swallowing = %p\n", c->swallowing);
+
+  if ((q = c->swallowing)) {
+    logclient(c, 0);
+    w = c->win;
+    c->win = q->win;
+    q->win = w;
+    c->swallowing = NULL;
+
+    /* attach so we can call unmanage() */
+    attach(q);
+    unmanage(q, destroyed);
+    return;
+  }
+
+  m = c->mon;
 	/* Remove client from lists */
 	detach(c);
 	detachstack(c);
@@ -2212,19 +2238,14 @@ unmapnotify(XEvent *e)
 	Client *c;
 	XUnmapEvent *ev = &e->xunmap;
 
-  infof("unmapnotify(): ");
-
 	if ((c = wintoclient(ev->window))) {
-    infof("client %p, ", c);
 		if (ev->send_event) {
-      infof("withdrawing");
 			setclientstate(c, WithdrawnState);
 		}
-		else
-      infof("unmanaging");
+		else {
 			unmanage(c, 0);
+		}
 	}
-  infof("\n");
 }
 
 void
