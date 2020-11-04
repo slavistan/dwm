@@ -381,15 +381,23 @@ applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 void
 arrange(Monitor *m)
 {
-	if (m)
+	if (m) {
 		showhide(m->stack);
-	else for (m = mons; m; m = m->next)
-		showhide(m->stack);
+    infof("bzzzz\n");
+  }
+	else {
+    for (m = mons; m; m = m->next) {
+      showhide(m->stack);
+    }
+  }
+
 	if (m) {
 		arrangemon(m);
 		restack(m);
-	} else for (m = mons; m; m = m->next)
-		arrangemon(m);
+	} else {
+    for (m = mons; m; m = m->next)
+      arrangemon(m);
+  }
 }
 
 void
@@ -1938,7 +1946,14 @@ showhide(Client *c)
 {
 	if (!c)
 		return;
+
+  infof("showhide(): client ");
+  logclient(c, 0);
+  infof(", isvisible = %d\n", ISVISIBLE(c));
+  static int rec = 0;
+  rec += 1;
 	if (ISVISIBLE(c)) {
+
 		/* show clients top down */
 		XMoveWindow(dpy, c->win, c->x, c->y);
 		if ((!c->mon->lt[c->mon->sellt]->arrange || c->isfloating) && !c->isfullscreen)
@@ -2196,7 +2211,6 @@ unmanage(Client *c, int destroyed)
   infof(", swallowing = %p\n", c->swallowing);
 
   if ((q = c->swallowing)) {
-    logclient(c, 0);
     w = c->win;
     c->win = q->win;
     q->win = w;
@@ -2204,7 +2218,15 @@ unmanage(Client *c, int destroyed)
 
     /* attach so we can call unmanage() */
     attach(q);
+    attachstack(q);
     unmanage(q, destroyed);
+
+    updatetitle(c);
+    arrange(c->mon);
+    XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
+    XMapWindow(dpy, c->win);
+    XSync(dpy, False);
+
     return;
   }
 
@@ -2226,10 +2248,12 @@ unmanage(Client *c, int destroyed)
 		XSetErrorHandler(xerror);
 		XUngrabServer(dpy);
 	}
+
 	free(c);
 	focus(NULL);
 	updateclientlist();
 	arrange(m);
+
 }
 
 void
