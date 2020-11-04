@@ -90,10 +90,10 @@ logclient(const Client *c, int verbosity) {
     return;
 
   switch (verbosity) {
-    case 0: { /* win id & name */
+    case 0: { /* name */
       XTextProperty text;
       XGetClassHint(dpy, c->win, &text);
-      infof("%p [%s]", c, text.value);
+      infof("%p [#%lu, %s]", c, c->win, text.value);
       XFree(text.value);
       break;
     }
@@ -110,3 +110,12 @@ logclient(const Client *c, int verbosity) {
   }
 }
 
+void logclientlist(Client *first) {
+
+  infof("Client list:\n");
+	for (; first; first = first->next) {
+    infof("\t");
+    logclient(first, 0);
+    infof("\n");
+  }
+}

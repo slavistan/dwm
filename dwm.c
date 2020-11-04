@@ -90,7 +90,7 @@ struct Monitor {
 	int wx, wy, ww, wh;   /* window area */
 	int gappx;            /* gaps between windows */
 	unsigned int seltags; /* selected tags */
-	unsigned int sellt;   /* selected layout */
+	unsigned int sellt;   /* selected layout (index into Monitor.lt) */
 	unsigned int tagset[2];
 	int showbar;
 	int topbar;
@@ -118,7 +118,7 @@ static void arrange(Monitor *m);
 static void arrangemon(Monitor *m);
 static void attach(Client *c);
 static void attachstack(Client *c);
-static void attachbelow(Client *c);
+static void attachbottom(Client *c);
 static void buttonpress(XEvent *e);
 static void checkotherwm(void);
 static void cleanup(void);
@@ -304,12 +304,16 @@ applyrules(Client *c)
 int
 applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 {
+  infof("applysizehints(): client ");
+  logclient(c, 0);
 	int baseismin;
 	Monitor *m = c->mon;
 
 	/* set minimum possible */
 	*w = MAX(1, *w);
 	*h = MAX(1, *h);
+
+  /* Interact is set when moving or resizing using the mouse */
 	if (interact) {
 		if (*x > sw)
 			*x = sw - WIDTH(c);
@@ -329,10 +333,12 @@ applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 		if (*y + *h + 2 * c->bw <= m->wy)
 			*y = m->wy;
 	}
+
 	if (*h < bh)
 		*h = bh;
 	if (*w < bh)
 		*w = bh;
+
 	if (resizehints || c->isfloating || !c->mon->lt[c->mon->sellt]->arrange) {
 		/* see last two sentences in ICCCM 4.1.2.3 */
 		baseismin = c->basew == c->minw && c->baseh == c->minh;
@@ -364,6 +370,11 @@ applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 		if (c->maxh)
 			*h = MIN(*h, c->maxh);
 	}
+
+  infof(", %d %d, %d %d, %d %d, %d %d\n",
+    *x, c->x, *y, c->y, *w, c->w, *h, c->h);
+
+  // Does the return value indicate whether a resize is necessary?
 	return *x != c->x || *y != c->y || *w != c->w || *h != c->h;
 }
 
@@ -403,10 +414,12 @@ attach(Client *c)
  * Attach client to end of its monitor's client list
  */
 void
-attachbelow(Client *c)
+attachbottom(Client *c)
 {
-	Client *below = c->mon->clients;
-	for (; below && below->next; below = below->next);
+	Client *below;
+
+	for (below = c->mon->clients; below && below->next; below = below->next);
+	c->next = NULL;
 	if (below)
 		below->next = c;
 	else
@@ -565,7 +578,7 @@ clientmessage(XEvent *e)
 }
 
 /*
- * Inform client window about it's (new) geometry [right?]
+ * Inform client window about it's (new) geometry via ConfigureNotify event
  */
 void
 configure(Client *c)
@@ -651,7 +664,7 @@ configurerequest(XEvent *e)
 				c->h = ev->height;
 			}
 
-			/* Keep the window within the confines of the parent. Snaps back to center. */
+			/* Keep the window within the confines of the monitor. Snaps back to center. */
 			if ((c->x + c->w) > m->mx + m->mw && c->isfloating)
 				c->x = m->mx + (m->mw / 2 - WIDTH(c) / 2); /* center in x direction */
 			if ((c->y + c->h) > m->my + m->mh && c->isfloating)
@@ -902,14 +915,37 @@ fakesignal(void)
       Client *cc;
 
       winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
-      if (*q != '\0' || p+1 == q)
+      if (*q != '\0')
         return 1;
 
       if ((cc = wintoclient(winclient)) == NULL)
         return 1;
 
-      infof("unswallow client = %lu\n", winclient);
       unswallow(cc);
+    } else if (*p == ':' && !strcmp(buf, "wininfo")) {
+      Window winclient;
+      Client *cc;
+
+      winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
+      if (*q != '\0')
+        return 1;
+
+      if ((cc = wintoclient(winclient)) == NULL)
+        return 1;
+
+      logclient(cc, 1);
+    } else if (*p == ':' && !strcmp(buf, "resizeclient")) {
+      Window winclient;
+      Client *cc;
+
+      winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
+      if (*q != '\0')
+        return 1;
+
+      if ((cc = wintoclient(winclient)) == NULL)
+        return 1;
+
+      resizeclient(cc, 20, 100, 300, 300);
     }
     return 1;
 	}
@@ -923,9 +959,14 @@ focus(Client *c)
 {
 	if (!c || !ISVISIBLE(c))
 		for (c = selmon->stack; c && !ISVISIBLE(c); c = c->snext);
+
 	if (selmon->sel && selmon->sel != c)
 		unfocus(selmon->sel, 0);
+
 	if (c) {
+    infof("focus(): Client ");
+    logclient(c, 0);
+    infof("\n");
 		if (c->mon != selmon)
 			selmon = c->mon;
 		if (c->isurgent)
@@ -1169,6 +1210,7 @@ killclient(const Arg *arg)
 void
 manage(Window w, XWindowAttributes *wa)
 {
+  infof("manage(): w = %lu\n", w);
 	Client *c, *t = NULL;
 	Window trans = None;
 	XWindowChanges wc;
@@ -1215,7 +1257,7 @@ manage(Window w, XWindowAttributes *wa)
 		c->isfloating = c->oldstate = trans != None || c->isfixed;
 	if (c->isfloating)
 		XRaiseWindow(dpy, c->win);
-	attachbelow(c);
+	attachbottom(c);
 	attachstack(c);
 	XChangeProperty(dpy, root, netatom[NetClientList], XA_WINDOW, 32, PropModeAppend,
 		(unsigned char *) &(c->win), 1);
@@ -1242,6 +1284,7 @@ mappingnotify(XEvent *e)
 void
 maprequest(XEvent *e)
 {
+  infof("maprequest(): ");
 	static XWindowAttributes wa;
 	XMapRequestEvent *ev = &e->xmaprequest;
 
@@ -1249,8 +1292,11 @@ maprequest(XEvent *e)
 		return;
 	if (wa.override_redirect)
 		return;
-	if (!wintoclient(ev->window))
+	if (!wintoclient(ev->window)) {
+    infof("-> manage(%lu)\n", ev->window);
 		manage(ev->window, &wa);
+  }
+  infof("\n");
 }
 
 /*
@@ -1484,10 +1530,23 @@ recttomon(int x, int y, int w, int h)
 void
 resize(Client *c, int x, int y, int w, int h, int interact)
 {
-	if (applysizehints(c, &x, &y, &w, &h, interact))
-		resizeclient(c, x, y, w, h);
+  infof("resize(): client ");
+  logclient(c, 0);
+  infof(", interact = %d\n", interact);
+	if (applysizehints(c, &x, &y, &w, &h, interact)) {
+    infof("applysizehints() == true, ");
+    logclient(c, 0);
+    infof("\n");
+    resizeclient(c, x, y, w, h);
+  }
+  infof("applysizehints() == false, ");
+  logclient(c, 0);
+  infof("\n");
 }
 
+/*
+ * Resize a client window (with immediate effect)
+ */
 void
 resizeclient(Client *c, int x, int y, int w, int h)
 {
@@ -1526,8 +1585,8 @@ resizemouse(const Arg *arg)
 	do {
 		XMaskEvent(dpy, MOUSEMASK|ExposureMask|SubstructureRedirectMask, &ev);
 		switch(ev.type) {
-		case ConfigureRequest:
-		case Expose:
+		case ConfigureRequest: /* fallthrough */
+		case Expose: /* fallthrough */
 		case MapRequest:
 			handler[ev.type](&ev);
 			break;
@@ -1645,7 +1704,7 @@ sendmon(Client *c, Monitor *m)
 	c->mon = m;	/* set client's new monitor handle */
 	c->tags = m->tagset[m->seltags]; /* make client adopt new monitor's displayed tags */
 	c->next = NULL; /* Null c->next, as we're attaching to end of list */
-	attachbelow(c);
+	attachbottom(c);
 	attachstack(c);
 	focus(NULL);
 	arrange(NULL);
@@ -1809,7 +1868,8 @@ setup(void)
 	lrpad = drw->fonts->h;
 	bh = drw->fonts->h + 2;
 	updategeom();
-	/* init atoms */
+
+	/* Initialize atoms from property names */
 	utf8string = XInternAtom(dpy, "UTF8_STRING", False);
 	wmatom[WMProtocols] = XInternAtom(dpy, "WM_PROTOCOLS", False);
 	wmatom[WMDelete] = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
@@ -1824,6 +1884,7 @@ setup(void)
 	netatom[NetWMWindowType] = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
 	netatom[NetWMWindowTypeDialog] = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DIALOG", False);
 	netatom[NetClientList] = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+
 	/* init cursors */
 	cursor[CurNormal] = drw_cur_create(drw, XC_left_ptr);
 	cursor[CurResize] = drw_cur_create(drw, XC_sizing);
@@ -1948,53 +2009,44 @@ swallow(Client *c, Client *other)
   logclient(c, 0);
   infof(", other = ");
   logclient(other, 0);
+
+  Client **tc;
+  Monitor *m;
+  Window w;
+
   /* no multiple or nested swallowing. */
   // TODO: Inhibit or implement n-1 swallowing
-//	if (!c || !other || c->swallowing == NULL || other->swallowing == NULL)
-//		return;
+	if (!c || !other || c->swallowing == NULL || other->swallowing == NULL)
+		return;
 
-	/* Remove 'other' from its current client and focus lists */
+	/* Remove 'other' from its current client and focus lists and save its address */
 	detach(other);
 	detachstack(other);
 
-  /* swap other with c in c's client list */
-  Client **tc;
-  other->next = c->next;
-  for (tc = &c->mon->clients; *tc && *tc != c; tc = &(*tc)->next);
-  *tc = other;
+  if (other->mon != c->mon) {
+    arrange(other->mon);
+    other->mon = c->mon;
+  }
+	c->swallowing = other;
 
-  for (tc = &c->mon->stack; *tc && *tc != c; tc = &(*tc)->snext);
-  *tc = other;
-
-	other->mon = c->mon;
-	other->swallowedby = c;
-	XMoveResizeWindow(dpy, other->win, c->x, c->y, c->w, c->h);
+  /* Swap windows */
+  w = other->win;
+  other->win = c->win;
+  c->win = w;
 
   /* Unmap the window. Note that the subsequent UnmapNotify event will not do
    * anything to our swallowing client c as it's not in the linked list anymore.
    * We may retrieve it later on. */
-  XUnmapWindow(dpy, c->win);
+	XUnmapWindow(dpy, other->win); /* windows of c and other are swapped at this point */
 
-  // TODO: redraw other's monitor
+	/* Redraw everything */
+	updatetitle(c);
+	arrange(c->mon);
+	configure(c);
+	XSync(dpy, False);
 
-	arrange(other->mon);
-	configure(other);
-	updateclientlist();
-
-  XSync(dpy, False);
-//	setclientstate(other, WithdrawnState); // Why withdraw 'other'?
-//	XUnmapWindow(dpy, c->win);
-
-//	/* swap windows of p and c */
-//	Window w = c->win;
-//	c->win = other->win;
-//	other->win = w;
-
-//	updatetitle(c);
-//	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
-//	arrange(c->mon);
-//	configure(c);
-//	updateclientlist();
+  /* Note: We don't call updateclientlist() which would remove the hidden clients window from
+   *       the _NET_CLIENT_LIST, implying the we do not manage the window anymore, which we do! */
 
   infof("\n");
 }
@@ -2024,12 +2076,10 @@ tagmon(const Arg *arg)
 	restack(c->mon); /* required for focus(c) to work */
 }
 
-/*
- * Apply tiling layout. Update clients' geometry parameters
- */
 void
 tile(Monitor *m)
 {
+  infof("tile(): ");
 	unsigned int i, n, h, mw, my, ty;
 	float mfacts = 0, sfacts = 0;
 	Client *c;
@@ -2180,24 +2230,42 @@ unmapnotify(XEvent *e)
 void
 unswallow(Client *c)
 {
-  if (!c)
+  infof("unswallow(): Client ");
+  logclient(c, 0);
+  infof("\n");
+
+  Client **tc;
+  Client *other;
+  Window w;
+
+  if (!c || (other = c->swallowing) == NULL)
     return;
 
-	c->win = c->swallowedby->win;
+  /* Swap windows */
+  w = other->win;
+  other->win = c->win;
+  c->win = w;
 
-	free(c->swallowedby);
-	c->swallowedby = NULL;
+  /* Attach after swallower */
+  other->next = c->next;
+  c->next = other;
 
+  attachstack(other);
+  c->swallowing = NULL;
 
-	/* unfullscreen the client */
-	setfullscreen(c, 0);
-	updatetitle(c);
+  updatetitle(c);
+  focus(other);
 	arrange(c->mon);
-	XMapWindow(dpy, c->win);
-	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
-	setclientstate(c, NormalState);
-	focus(NULL);
-	arrange(c->mon);
+
+  /* Some windows require this (e.g. evince). Buy why?  */
+	XMoveResizeWindow(dpy, other->win, other->x, other->y, other->w, other->h);
+
+	XMapWindow(dpy, w);
+  infof("###\n\n\n");
+  logclient(c, 1);
+  logclient(other, 1);
+  infof("###\n\n\n");
+	XSync(dpy, False);
 }
 
 
@@ -2302,7 +2370,7 @@ updategeom(void)
 					m->clients = c->next;
 					detachstack(c);
 					c->mon = mons;
-					attachbelow(c);
+					attachbottom(c);
 					attachstack(c);
 				}
 				if (m == selmon)
@@ -2346,6 +2414,9 @@ updatenumlockmask(void)
 	XFreeModifiermap(modmap);
 }
 
+/*
+ * Updates a client's size hint parameters
+ */
 void
 updatesizehints(Client *c)
 {
@@ -2355,6 +2426,7 @@ updatesizehints(Client *c)
 	if (!XGetWMNormalHints(dpy, c->win, &size, &msize))
 		/* size is uninitialized, ensure that size.flags aren't used */
 		size.flags = PSize;
+
 	if (size.flags & PBaseSize) {
 		c->basew = size.base_width;
 		c->baseh = size.base_height;
@@ -2363,16 +2435,19 @@ updatesizehints(Client *c)
 		c->baseh = size.min_height;
 	} else
 		c->basew = c->baseh = 0;
+
 	if (size.flags & PResizeInc) {
 		c->incw = size.width_inc;
 		c->inch = size.height_inc;
 	} else
 		c->incw = c->inch = 0;
+
 	if (size.flags & PMaxSize) {
 		c->maxw = size.max_width;
 		c->maxh = size.max_height;
 	} else
 		c->maxw = c->maxh = 0;
+
 	if (size.flags & PMinSize) {
 		c->minw = size.min_width;
 		c->minh = size.min_height;
@@ -2381,11 +2456,14 @@ updatesizehints(Client *c)
 		c->minh = size.base_height;
 	} else
 		c->minw = c->minh = 0;
+
 	if (size.flags & PAspect) {
 		c->mina = (float)size.min_aspect.y / size.min_aspect.x;
 		c->maxa = (float)size.max_aspect.x / size.max_aspect.y;
 	} else
 		c->maxa = c->mina = 0.0;
+
+  /* Client has fixed size iff max = min in both dimensions */
 	c->isfixed = (c->maxw && c->maxh && c->maxw == c->minw && c->maxh == c->minh);
 }
 
