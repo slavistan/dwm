@@ -92,9 +92,12 @@ logclient(const Client *c, int verbosity) {
   switch (verbosity) {
     case 0: { /* name */
       XTextProperty text;
-      XGetClassHint(dpy, c->win, &text);
-      infof("%p [#%lu, %s]", c, c->win, text.value);
-      XFree(text.value);
+      if (XGetClassHint(dpy, c->win, &text)) {
+        infof("%p [#%lu, %s]", c, c->win, text.value);
+        XFree(text.value);
+      }
+      else
+        infof("%p [#%lu, NOWIN]", c, c->win);
       break;
     }
 
