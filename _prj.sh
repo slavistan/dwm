@@ -3,7 +3,7 @@
 cd ${0:A:h}
 
 start_xephyr() {
-  Xephyr -br -ac -noreset -resizeable :4 &
+  Xephyr -br -ac -reset -terminate -resizeable :4 &
   sleep 1
 }
 

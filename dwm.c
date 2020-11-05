@@ -2282,12 +2282,16 @@ unmanage(Client *c, int destroyed)
 
 }
 
+/*
+ * UnmapNotify gets triggered multiple times per closing window, at least once by the
+ * client and once by the root window.
+ */
 void
 unmapnotify(XEvent *e)
 {
 	Client *c, *q;
 	XUnmapEvent *ev = &e->xunmap;
-    Window w;
+  Window w;
 
 //	if ((c = wintoclient(ev->window))) {
 //		if (ev->send_event) {
