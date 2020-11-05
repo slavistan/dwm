@@ -209,6 +209,7 @@ static void updatewindowtype(Client *c);
 static void updatewmhints(Client *c);
 static void view(const Arg *arg);
 static Client *wintoclient(Window w);
+static int wintoclient2(Window w, Client **);
 static Monitor *wintomon(Window w);
 static int xerror(Display *dpy, XErrorEvent *ee);
 static int xerrordummy(Display *dpy, XErrorEvent *ee);
@@ -383,7 +384,6 @@ arrange(Monitor *m)
 {
 	if (m) {
 		showhide(m->stack);
-    infof("bzzzz\n");
   }
 	else {
     for (m = mons; m; m = m->next) {
@@ -727,11 +727,52 @@ createmon(void)
 void
 destroynotify(XEvent *e)
 {
-	Client *c;
+	Client *c, *q;
+	Window w;
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
 
-	if ((c = wintoclient(ev->window)))
-		unmanage(c, 1);
+  infof("destroynotify(): window = %lu\n", ev->window);
+//	if ((c = wintoclient2(ev->window))) {
+//    if (!c->swallowing)
+//      unmanage(c, 1);
+//  }
+  switch (wintoclient2(ev->window, &c)) {
+  case 0: {
+    infof(" ..case 0\n");
+    return;
+  }
+  case 1: { /* regular client not involved in swallowing */
+    infof(" ..case 1\n");
+    unmanage(c, 1);
+    return;
+  }
+  case 2: { /* swallowee */
+    infof(" ..case 2\n");
+    q = c->swallowing;
+    /* swap wins */
+    w = c->win;
+    c->win = q->win;
+    q->win = w;
+    /* fallthrough */
+  }
+  case 3: { /* swallower */
+    infof(" ..case 3\n");
+    q = c->swallowing;
+    break;
+  }
+  }
+  c->swallowing = NULL;
+
+  /* attach so we can call unmanage() */
+  attach(q);
+  attachstack(q);
+  unmanage(q, 1);
+
+  updatetitle(c);
+  arrange(c->mon);
+  XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
+  XMapWindow(dpy, c->win);
+  XSync(dpy, False);
 }
 
 /*
@@ -954,6 +995,16 @@ fakesignal(void)
         return 1;
 
       resizeclient(cc, 20, 100, 300, 300);
+    } else if (*p == ':' && !strcmp(buf, "wintoclient2")) {
+      Window winclient;
+      Client *cc;
+
+      winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
+      if (*q != '\0')
+        return 1;
+
+      int ret = wintoclient2(winclient, &cc);
+      infof("wintoclient2(%lu) -> %d\n", winclient, ret);
     }
     return 1;
 	}
@@ -972,9 +1023,8 @@ focus(Client *c)
 		unfocus(selmon->sel, 0);
 
 	if (c) {
-    infof("focus(): Client ");
-    logclient(c, 0);
-    infof("\n");
+    logclient(c, 1);
+    logclientlist(c->mon->clients);
 		if (c->mon != selmon)
 			selmon = c->mon;
 		if (c->isurgent)
@@ -1292,7 +1342,7 @@ mappingnotify(XEvent *e)
 void
 maprequest(XEvent *e)
 {
-  infof("maprequest(): ");
+  Client *c;
 	static XWindowAttributes wa;
 	XMapRequestEvent *ev = &e->xmaprequest;
 
@@ -1300,11 +1350,11 @@ maprequest(XEvent *e)
 		return;
 	if (wa.override_redirect)
 		return;
-	if (!wintoclient(ev->window)) {
-    infof("-> manage(%lu)\n", ev->window);
-		manage(ev->window, &wa);
+
+  /* Allow maprequests only for new non-swallowing windows */ // TODO: wintoclient2
+	if (!wintoclient(ev->window)) { // TODO: wintoswallower
+    manage(ev->window, &wa);
   }
-  infof("\n");
 }
 
 /*
@@ -1870,7 +1920,7 @@ setup(void)
 	sh = DisplayHeight(dpy, screen);
 	root = RootWindow(dpy, screen);
 	xinitvisual();
-  drw = drw_create(dpy, screen, root, sw, sh, visual, depth, cmap);
+	drw = drw_create(dpy, screen, root, sw, sh, visual, depth, cmap);
 	if (!drw_fontset_create(drw, fonts, LENGTH(fonts)))
 		die("no fonts could be loaded.");
 	lrpad = drw->fonts->h;
@@ -2202,33 +2252,9 @@ void
 unmanage(Client *c, int destroyed)
 {
   Client *q;
-	Monitor *m;
 	XWindowChanges wc;
   Window w;
-
-  infof("unmanage(): client ");
-  logclient(c, 0);
-  infof(", swallowing = %p\n", c->swallowing);
-
-  if ((q = c->swallowing)) {
-    w = c->win;
-    c->win = q->win;
-    q->win = w;
-    c->swallowing = NULL;
-
-    /* attach so we can call unmanage() */
-    attach(q);
-    attachstack(q);
-    unmanage(q, destroyed);
-
-    updatetitle(c);
-    arrange(c->mon);
-    XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
-    XMapWindow(dpy, c->win);
-    XSync(dpy, False);
-
-    return;
-  }
+  Monitor *m;
 
   m = c->mon;
 	/* Remove client from lists */
@@ -2259,17 +2285,50 @@ unmanage(Client *c, int destroyed)
 void
 unmapnotify(XEvent *e)
 {
-	Client *c;
+	Client *c, *q;
 	XUnmapEvent *ev = &e->xunmap;
+    Window w;
 
-	if ((c = wintoclient(ev->window))) {
-		if (ev->send_event) {
-			setclientstate(c, WithdrawnState);
-		}
-		else {
-			unmanage(c, 0);
-		}
-	}
+//	if ((c = wintoclient(ev->window))) {
+//		if (ev->send_event) {
+//			setclientstate(c, WithdrawnState);
+//		}
+//		else {
+//			unmanage(c, 0);
+//		}
+//	}
+//
+  infof("unmapnotify(): window %lu\n", ev->window);
+
+  switch (wintoclient2(ev->window, &c)) {
+    case 1:
+      infof (" --> case 1\n");
+      unmanage(c, 0);
+      /* fallthrough */
+    case 0:
+      return;
+    case 2: /* is unmapped swallowee */
+      /* swap wins */
+      q = c->swallowing;
+      w = c->win;
+      c->win = q->win;
+      q->win = w;
+      infof (" --> case 2\n");
+    case 3: /* swallower unmapped; happens once during swallowing */
+      infof (" --> case 3\n");
+      return;
+  }
+
+  attach(q);
+  attachstack(q);
+  unmanage(q, 0);
+
+  updatetitle(c);
+  arrange(c->mon);
+  XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
+  XMapWindow(dpy, c->win);
+  XSync(dpy, False);
+
 }
 
 void
@@ -2583,6 +2642,42 @@ wintoclient(Window w)
 			if (c->win == w)
 				return c;
 	return NULL;
+}
+
+/*
+ * Retrieve clients involved in swallowing. TODO: doc
+ */
+int
+wintoclient2(Window w, Client **tc)
+{
+	Client *c;
+	Monitor *m;
+
+  infof("wintoclient(): win = %lu\n", w);
+
+	for (m = mons; m; m = m->next) {
+		for (c = m->clients; c; c = c->next) {
+      infof("\t\t");
+      logclient(c, 0);
+      infof("\n");
+			if (c->swallowing) {
+        if (c->win == w) { /* win belongs to swallowee */
+          *tc = c;
+          return 2;
+        }
+        if (c->swallowing->win == w) {
+          *tc = c;
+          return 3; /* win belongs to swallower */
+        }
+      }
+      else if (c->win == w) { /* win belongs to non-swallower */
+          *tc = c;
+          return 1;
+      }
+    }
+  }
+  *tc = NULL;
+	return 0;
 }
 
 Monitor *

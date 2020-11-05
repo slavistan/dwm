@@ -49,7 +49,7 @@ infof(const char *fmt, ...) {
 
 /* Stringify a client */
 size_t
-strnfy_client(char* str, size_t size, const Client *c) {
+strnfy_client(char* str, size_t size, Client *c) {
 
   return snprintf(str, size,
       "Client 0x%p = {\n"
@@ -66,6 +66,7 @@ strnfy_client(char* str, size_t size, const Client *c) {
       "  snext = 0x%p\n"
       "  mon = 0x%p\n"
       "  win = %lu\n"
+      "  swallowing = %p\n"
       "}\n"
       , (void*)c,
         c->name,
@@ -80,11 +81,12 @@ strnfy_client(char* str, size_t size, const Client *c) {
         (void*)c->next,
         (void*)c->snext,
         (void*)c->mon,
-        c->win);
+        c->win,
+        c->swallowing);
 }
 
 void
-logclient(const Client *c, int verbosity) {
+logclient(Client *c, int verbosity) {
 
   if (!c)
     return;

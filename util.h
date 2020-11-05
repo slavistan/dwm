@@ -14,5 +14,6 @@ void die(const char *fmt, ...);
 void infof(const char *fmt, ...);
 void *ecalloc(size_t nmemb, size_t size);
 
-size_t strnfy_client(char* str, size_t size, const Client*);
-void logclient(const Client*, int verbosity);
+size_t strnfy_client(char* str, size_t size, Client*);
+void logclient(Client*, int verbosity);
+void logclientlist(Client*);
