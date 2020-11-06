@@ -119,6 +119,7 @@ static void arrangemon(Monitor *m);
 static void attach(Client *c);
 static void attachstack(Client *c);
 static void attachbottom(Client *c);
+static void attachbelow(Client *c);
 static void buttonpress(XEvent *e);
 static void checkotherwm(void);
 static void cleanup(void);
@@ -185,7 +186,6 @@ static void sighup(int unused);
 static void sigterm(int unused);
 static void spawn(const Arg *arg);
 static void statusclick(const Arg *arg);
-static void swallow(Client*, Client*);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
 static void tile(Monitor *);
@@ -196,7 +196,6 @@ static void toggleview(const Arg *arg);
 static void unfocus(Client *c, int setfocus);
 static void unmanage(Client *c, int destroyed);
 static void unmapnotify(XEvent *e);
-static void unswallow(Client *c);
 static void updatebarpos(Monitor *m);
 static void updatebars(void);
 static void updateclientlist(void);
@@ -209,7 +208,7 @@ static void updatewindowtype(Client *c);
 static void updatewmhints(Client *c);
 static void view(const Arg *arg);
 static Client *wintoclient(Window w);
-static int wintoclient2(Window w, Client **);
+static Client *wintoclient2(Window w);
 static Monitor *wintomon(Window w);
 static int xerror(Display *dpy, XErrorEvent *ee);
 static int xerrordummy(Display *dpy, XErrorEvent *ee);
@@ -432,6 +431,18 @@ attachbottom(Client *c)
 		below->next = c;
 	else
 		c->mon->clients = c;
+}
+
+void
+attachbelow(Client *c)
+{
+	/* If there is nothing on the monitor or the selected client is floating, attach normally */
+	if(!c->mon->sel || c->mon->sel == c || c->mon->sel->isfloating) {
+		attachbottom(c);
+		return;
+	}
+	c->next = c->mon->sel->next;
+	c->mon->sel->next = c;
 }
 
 void
@@ -727,52 +738,12 @@ createmon(void)
 void
 destroynotify(XEvent *e)
 {
-	Client *c, *q;
-	Window w;
+	Client *c;
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
 
-  infof("destroynotify(): window = %lu\n", ev->window);
-//	if ((c = wintoclient2(ev->window))) {
-//    if (!c->swallowing)
-//      unmanage(c, 1);
-//  }
-  switch (wintoclient2(ev->window, &c)) {
-  case 0: {
-    infof(" ..case 0\n");
-    return;
-  }
-  case 1: { /* regular client not involved in swallowing */
-    infof(" ..case 1\n");
-    unmanage(c, 1);
-    return;
-  }
-  case 2: { /* swallowee */
-    infof(" ..case 2\n");
-    q = c->swallowing;
-    /* swap wins */
-    w = c->win;
-    c->win = q->win;
-    q->win = w;
-    /* fallthrough */
-  }
-  case 3: { /* swallower */
-    infof(" ..case 3\n");
-    q = c->swallowing;
-    break;
-  }
-  }
-  c->swallowing = NULL;
-
-  /* attach so we can call unmanage() */
-  attach(q);
-  attachstack(q);
-  unmanage(q, 1);
-
-  updatetitle(c);
-  arrange(c->mon);
-  XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
-  XMapWindow(dpy, c->win);
-  XSync(dpy, False);
+	if ((c = wintoclient(ev->window))) {
+	  unmanage(c, 1);
+	}
 }
 
 /*
@@ -916,7 +887,7 @@ int
 fakesignal(void)
 {
 	char buf[32];
-  #define indicator "fsignal"
+	#define indicator ":"
 	char rootname[sizeof(indicator) + 256];
 	ssize_t n;
 	char *p, *q;
@@ -958,19 +929,7 @@ fakesignal(void)
         return 1;
       }
 
-      swallow(c, o);
-    } else if (*p == ':' && !strcmp(buf, "unswallow")) {
-      Window winclient;
-      Client *cc;
-
-      winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
-      if (*q != '\0')
-        return 1;
-
-      if ((cc = wintoclient(winclient)) == NULL)
-        return 1;
-
-      unswallow(cc);
+      //wallow(c, o);
     } else if (*p == ':' && !strcmp(buf, "wininfo")) {
       Window winclient;
       Client *cc;
@@ -995,16 +954,6 @@ fakesignal(void)
         return 1;
 
       resizeclient(cc, 20, 100, 300, 300);
-    } else if (*p == ':' && !strcmp(buf, "wintoclient2")) {
-      Window winclient;
-      Client *cc;
-
-      winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
-      if (*q != '\0')
-        return 1;
-
-      int ret = wintoclient2(winclient, &cc);
-      infof("wintoclient2(%lu) -> %d\n", winclient, ret);
     }
     return 1;
 	}
@@ -1281,10 +1230,11 @@ manage(Window w, XWindowAttributes *wa)
 	c->w = c->oldw = wa->width;
 	c->h = c->oldh = wa->height;
 	c->oldbw = wa->border_width;
-  c->cfact = 1.0;
+	c->cfact = 1.0;
 
-	updatetitle(c);
+	updatetitle(c); /* set c->name */
 	if (XGetTransientForHint(dpy, w, &trans) && (t = wintoclient(trans))) {
+		/* this branch is ostensibly related to popups of some kind. See ICCCM 4.1.2.6. */
 		c->mon = t->mon;
 		c->tags = t->tags;
 	} else {
@@ -1292,6 +1242,10 @@ manage(Window w, XWindowAttributes *wa)
 		applyrules(c);
 	}
 
+	/*
+	 * Prune extents of window. Relevant for floating windows as a tiling layout will
+	 * override the geometry fields via arrange().
+	 */
 	if (c->x + WIDTH(c) > c->mon->mx + c->mon->mw)
 		c->x = c->mon->mx + c->mon->mw - WIDTH(c);
 	if (c->y + HEIGHT(c) > c->mon->my + c->mon->mh)
@@ -1302,12 +1256,16 @@ manage(Window w, XWindowAttributes *wa)
 		&& (c->x + (c->w / 2) < c->mon->wx + c->mon->ww)) ? bh : c->mon->my);
 	c->bw = borderpx;
 
+	/*
+	 * Border configuration
+	 */
 	wc.border_width = c->bw;
 	XConfigureWindow(dpy, w, CWBorderWidth, &wc);
 	XSetWindowBorder(dpy, w, scheme[SchemeNorm][ColBorder].pixel);
+
 	configure(c); /* propagates border_width, if size doesn't change */
-	updatewindowtype(c);
-	updatesizehints(c);
+	updatewindowtype(c); /* fullscreen || floating */
+	updatesizehints(c); /* initialize size hint fields */
 	updatewmhints(c);
 	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask);
 	grabbuttons(c, 0);
@@ -1329,6 +1287,7 @@ manage(Window w, XWindowAttributes *wa)
 	focus(NULL);
 }
 
+
 void
 mappingnotify(XEvent *e)
 {
@@ -1342,7 +1301,7 @@ mappingnotify(XEvent *e)
 void
 maprequest(XEvent *e)
 {
-  Client *c;
+	Client *c;
 	static XWindowAttributes wa;
 	XMapRequestEvent *ev = &e->xmaprequest;
 
@@ -1350,11 +1309,8 @@ maprequest(XEvent *e)
 		return;
 	if (wa.override_redirect)
 		return;
-
-  /* Allow maprequests only for new non-swallowing windows */ // TODO: wintoclient2
-	if (!wintoclient(ev->window)) { // TODO: wintoswallower
-    manage(ev->window, &wa);
-  }
+		if (!wintoclient(ev->window))
+			manage(ev->window, &wa);
 }
 
 /*
@@ -2064,64 +2020,6 @@ statusclick(const Arg *arg)
 	spawn(&arg2);
 }
 
-/*
- * TODO: rename to swallow
- */
-void
-swallow(Client *c, Client *other)
-{
-  infof("swallow(): c = ");
-  logclient(c, 0);
-  infof(", other = ");
-  logclient(other, 0);
-
-  Client *q;
-  Client **tc;
-  Monitor *m;
-  Window w;
-
-  /* no multiple or nested swallowing. */
-  // TODO: Inhibit or implement n-1 swallowing
-	if (!c || !other || c->swallowing || other->swallowing) {
-		return;
-  }
-
-	/* Remove 'other' from its current client and focus lists and save its address */
-	detach(other);
-	detachstack(other);
-	c->swallowing = other;
-
-  /* Update monitors */
-  if (other->mon != c->mon) {
-    arrange(other->mon);
-    other->mon = c->mon;
-  }
-
-  /* Swap windows */
-  w = other->win;
-  other->win = c->win;
-  c->win = w;
-
-  /* Unmap the window. Note that the subsequent UnmapNotify event will not do
-   * anything to our swallowing client c as it's not in the linked list anymore.
-   * We may retrieve it later on. */
-	XUnmapWindow(dpy, other->win); /* windows of c and other are swapped at this point */
-
-	/* Redraw everything */
-	updatetitle(c);
-	focus(NULL);
-	arrange(c->mon);
-
-  /* Some windows require this (e.g. evince). Buy why?  */
-	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
-	XSync(dpy, False);
-
-  /* Note: We don't call updateclientlist() which would remove the hidden clients window from
-   *       the _NET_CLIENT_LIST, implying the we do not manage the window anymore, which we do! */
-
-  infof("\n");
-}
-
 void
 tag(const Arg *arg)
 {
@@ -2251,12 +2149,9 @@ unfocus(Client *c, int setfocus)
 void
 unmanage(Client *c, int destroyed)
 {
-  Client *q;
 	XWindowChanges wc;
-  Window w;
-  Monitor *m;
+	Monitor *m = c->mon;
 
-  m = c->mon;
 	/* Remove client from lists */
 	detach(c);
 	detachstack(c);
@@ -2282,100 +2177,26 @@ unmanage(Client *c, int destroyed)
 
 }
 
-/*
- * UnmapNotify gets triggered multiple times per closing window, at least once by the
- * client and once by the root window.
- */
-void
-unmapnotify(XEvent *e)
-{
-	Client *c, *q;
+void unmapnotify(XEvent *e) {
+  /*
+   * UnmapNotify gets triggered multiple times per closing window. Once for the
+   * window itself, and once again due to it being a child of the root window.
+   * as the WM is listening for SubstructureNotify events, which include
+   * StructureNotify events of _any_ of its children, right?
+   */
+
+	Client *c;
 	XUnmapEvent *ev = &e->xunmap;
-  Window w;
 
-//	if ((c = wintoclient(ev->window))) {
-//		if (ev->send_event) {
-//			setclientstate(c, WithdrawnState);
-//		}
-//		else {
-//			unmanage(c, 0);
-//		}
-//	}
-//
-  infof("unmapnotify(): window %lu\n", ev->window);
-
-  switch (wintoclient2(ev->window, &c)) {
-    case 1:
-      infof (" --> case 1\n");
-      unmanage(c, 0);
-      /* fallthrough */
-    case 0:
-      return;
-    case 2: /* is unmapped swallowee */
-      /* swap wins */
-      q = c->swallowing;
-      w = c->win;
-      c->win = q->win;
-      q->win = w;
-      infof (" --> case 2\n");
-    case 3: /* swallower unmapped; happens once during swallowing */
-      infof (" --> case 3\n");
-      return;
-  }
-
-  attach(q);
-  attachstack(q);
-  unmanage(q, 0);
-
-  updatetitle(c);
-  arrange(c->mon);
-  XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
-  XMapWindow(dpy, c->win);
-  XSync(dpy, False);
-
+	if ((c = wintoclient(ev->window))) {
+		if (ev->send_event) {
+			setclientstate(c, WithdrawnState);
+		}
+		else {
+			unmanage(c, 0);
+		}
+	}
 }
-
-void
-unswallow(Client *c)
-{
-  infof("unswallow(): Client ");
-  logclient(c, 0);
-  infof("\n");
-
-  Client **tc;
-  Client *other;
-  Window w;
-
-  if (!c || (other = c->swallowing) == NULL)
-    return;
-
-  /* Swap windows */
-  w = other->win;
-  other->win = c->win;
-  c->win = w;
-
-  /* Attach after swallower */
-  other->next = c->next;
-  c->next = other;
-
-  attachstack(other);
-  c->swallowing = NULL;
-
-  updatetitle(c);
-  focus(other);
-	arrange(c->mon);
-
-  /* Some windows require this (e.g. evince). Buy why?  */
-	XMoveResizeWindow(dpy, other->win, other->x, other->y, other->w, other->h);
-
-	XMapWindow(dpy, w);
-  infof("###\n\n\n");
-  logclient(c, 1);
-  logclient(other, 1);
-  infof("###\n\n\n");
-	XSync(dpy, False);
-}
-
 
 void
 updatebars(void)
@@ -2583,6 +2404,9 @@ updatestatus(void)
 	drawbar(selmon);
 }
 
+/*
+ * Copy XA_WM_NAME into c->name
+ */
 void
 updatetitle(Client *c)
 {
@@ -2646,42 +2470,6 @@ wintoclient(Window w)
 			if (c->win == w)
 				return c;
 	return NULL;
-}
-
-/*
- * Retrieve clients involved in swallowing. TODO: doc
- */
-int
-wintoclient2(Window w, Client **tc)
-{
-	Client *c;
-	Monitor *m;
-
-  infof("wintoclient(): win = %lu\n", w);
-
-	for (m = mons; m; m = m->next) {
-		for (c = m->clients; c; c = c->next) {
-      infof("\t\t");
-      logclient(c, 0);
-      infof("\n");
-			if (c->swallowing) {
-        if (c->win == w) { /* win belongs to swallowee */
-          *tc = c;
-          return 2;
-        }
-        if (c->swallowing->win == w) {
-          *tc = c;
-          return 3; /* win belongs to swallower */
-        }
-      }
-      else if (c->win == w) { /* win belongs to non-swallower */
-          *tc = c;
-          return 1;
-      }
-    }
-  }
-  *tc = NULL;
-	return 0;
 }
 
 Monitor *
@@ -2812,7 +2600,7 @@ main(int argc, char *argv[])
 	if (pledge("stdio rpath proc exec", NULL) == -1)
 		die("pledge");
 #endif /* __OpenBSD__ */
-	scan();
+	scan(); /* load existing windows */
 	runstartup();
 	run();
 	if(restart) execvp(argv[0], argv);
