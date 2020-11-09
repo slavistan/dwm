@@ -87,7 +87,7 @@ struct Monitor {
 	int num;
 	int by;               /* bar geometry */
 	int mx, my, mw, mh;   /* screen size */
-	int wx, wy, ww, wh;   /* window area */
+	int wx, wy, ww, wh;   /* window area; draw area for clients */
 	int gappx;            /* gaps between windows */
 	unsigned int seltags; /* selected tags */
 	unsigned int sellt;   /* selected layout (index into Monitor.lt) */
@@ -246,7 +246,7 @@ static int restart = 0;
 static int running = 1;
 static Cur *cursor[CurLast];
 static Clr **scheme;
-Display *dpy; /* Display (?!) */
+Display *dpy;
 static Drw *drw;
 static Monitor *mons, *selmon; /* monitor list, selected monitor */
 static Window root, wmcheckwin;
@@ -304,8 +304,6 @@ applyrules(Client *c)
 int
 applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 {
-  infof("applysizehints(): client ");
-  logclient(c, 0);
 	int baseismin;
 	Monitor *m = c->mon;
 
@@ -313,7 +311,7 @@ applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 	*w = MAX(1, *w);
 	*h = MAX(1, *h);
 
-  /* Interact is set when moving or resizing using the mouse */
+ 	/* interact is set when moving or resizing using the mouse */
 	if (interact) {
 		if (*x > sw)
 			*x = sw - WIDTH(c);
@@ -371,9 +369,6 @@ applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 			*h = MIN(*h, c->maxh);
 	}
 
-  infof(", %d %d, %d %d, %d %d, %d %d\n",
-    *x, c->x, *y, c->y, *w, c->w, *h, c->h);
-
   // Does the return value indicate whether a resize is necessary?
 	return *x != c->x || *y != c->y || *w != c->w || *h != c->h;
 }
@@ -383,22 +378,26 @@ arrange(Monitor *m)
 {
 	if (m) {
 		showhide(m->stack);
-  }
+	}
 	else {
-    for (m = mons; m; m = m->next) {
-      showhide(m->stack);
-    }
-  }
+		for (m = mons; m; m = m->next) {
+			showhide(m->stack);
+		}
+	}
 
 	if (m) {
 		arrangemon(m);
 		restack(m);
-	} else {
-    for (m = mons; m; m = m->next)
-      arrangemon(m);
-  }
+	}
+	else {
+		for (m = mons; m; m = m->next)
+			arrangemon(m);
+	}
 }
 
+/*
+ * Call a monitor's arrange() function
+ */
 void
 arrangemon(Monitor *m)
 {
@@ -452,11 +451,14 @@ attachstack(Client *c)
 	c->mon->stack = c;
 }
 
-void
-buttonpress(XEvent *e)
-{
+void buttonpress(XEvent *e) {
+
+	/* In addition to clicks on the rootwin, the bars and unfocused top-level
+	 * windows, buttonpress events for clicks on clients are received for all
+	 * button/modifier pairs as defined in setup()'s call to grabbuttons(). */
+
 	unsigned int i, x, click;
-  int at, cindex;
+	int at, cindex;
 	Arg arg = {0};
 	Client *c;
 	Monitor *m;
@@ -469,7 +471,10 @@ buttonpress(XEvent *e)
 		selmon = m;
 		focus(NULL);
 	}
+
 	if (ev->window == selmon->barwin) {
+		/* Determine where the bar was clicked. */
+
 		i = x = 0;
 		do
 			x += TEXTW(tags[i]);
@@ -479,23 +484,24 @@ buttonpress(XEvent *e)
 			arg.ui = 1 << i;
 		} else if (ev->x < x + blw) {
 			click = ClkLtSymbol;
-    }
+		}
 		else if ((at = ev->x - (selmon->ww - TEXTW(stext) + lrpad - statusrpad)) >= -lrpad/2) {
-      if (at >= 0 && (cindex = drw_fontset_utf8indexat(drw, stext, at)) >= 0) {
-        click = ClkStatusText;
-        arg.ui = cindex;
-      }
-    }
+			if (at >= 0 && (cindex = drw_fontset_utf8indexat(drw, stext, at)) >= 0) {
+				click = ClkStatusText;
+				arg.ui = cindex;
+			}
+		}
 		else {
 			click = ClkWinTitle;
-    }
+		}
 	} else if ((c = wintoclient(ev->window))) {
 		focus(c);
 		restack(selmon);
 		XAllowEvents(dpy, ReplayPointer, CurrentTime);
 		click = ClkClientWin;
 	}
-  const Arg *parg;
+
+	const Arg *parg;
 	for (i = 0; i < LENGTH(buttons); i++) {
 		if (click == buttons[i].click && buttons[i].func && buttons[i].button == ev->button
 		&& CLEANMASK(buttons[i].mask) == CLEANMASK(ev->state)) {
@@ -597,7 +603,7 @@ clientmessage(XEvent *e)
 }
 
 /*
- * Inform client window about it's (new) geometry via ConfigureNotify event
+ * Inform client window about it's (new) geometry via ConfigureNotify event, right?
  */
 void
 configure(Client *c)
@@ -628,6 +634,7 @@ configurenotify(XEvent *e)
 
 	/* TODO: updategeom handling sucks, needs to be simplified */
 	if (ev->window == root) {
+		/* Adjust size of windows if root's size changes */
 		dirty = (sw != ev->width || sh != ev->height);
 		sw = ev->width;
 		sh = ev->height;
@@ -649,22 +656,24 @@ configurenotify(XEvent *e)
 void
 configurerequest(XEvent *e)
 {
+	/* XPM 2.2.1: A window's configuration consists of its position, extent,
+	 * border width and stacking order. These window parameters are special
+	 * in that they are configured in cooperation with the window manager. */
 	Client *c;
 	Monitor *m;
 	XConfigureRequestEvent *ev = &e->xconfigurerequest;
 	XWindowChanges wc;
 
 	if ((c = wintoclient(ev->window))) {
-    // ?? What makes changing the border width exclusive? Why are possible
-    //    other changes ignored if bw is set? Also, does this ever do anything
-    //    to X?
-		if (ev->value_mask & CWBorderWidth)
+		if (ev->value_mask & CWBorderWidth) {
+			// ?? What makes changing the border width exclusive? Why are
+			// possible other changes ignored if bw is set? Also, does this
+			// ever do anything to X?
 			c->bw = ev->border_width;
-
-		/* If either the window is floating or the current layout does not come
-		 * with an arrange function update the client's geometry fields. The
-		 * 'value_mask' indicates which geometric settings are to be updated. */
+		}
 		else if (c->isfloating || !selmon->lt[selmon->sellt]->arrange) {
+			/* If either the window is floating or the current layout does not come
+			 * with an arrange function update the client's geometry fields. */
 			m = c->mon;
 			if (ev->value_mask & CWX) {
 				c->oldx = c->x;
@@ -693,18 +702,23 @@ configurerequest(XEvent *e)
 			if ((ev->value_mask & (CWX|CWY)) && !(ev->value_mask & (CWWidth|CWHeight)))
 				configure(c);
 
-			/* Move only windows which are in the selected tagset. When changing the tag
-			 * everything will be redrawn anyway. */
+			/* Reconfigure only such windows which are in the selected tagset.
+			 * When changing the tag everything will be redrawn anyway. */
 			if (ISVISIBLE(c))
 				XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
 		}
-		else
-			configure(c); // Let the client know that nothing happend?
+		else {
+			// Let the client know that .. nothing happend? Is the XSendEvent() of a
+			// synthetic configure event a way to communicate to the window that
+			// its configure request has been ignored?
+			configure(c);
+		}
 	}
-	/* No client exists which corresponds to the event's window, in which case
-	 * forward the request verbatim to X. Presumably, this is only the case for
-   * unmapped windows (whose map request will create a corresponding client). */
 	else {
+		/* No client exists which corresponds to the event's window, in which
+		 * case forward the request verbatim to X. Presumably, this is only the
+		 * case for unmapped windows (whose map request will create a
+		 * corresponding client via manage()).  */
 		wc.x = ev->x;
 		wc.y = ev->y;
 		wc.width = ev->width;
@@ -879,6 +893,7 @@ expose(XEvent *e)
 	Monitor *m;
 	XExposeEvent *ev = &e->xexpose;
 
+	/* only draw the last contiguous expose indicated by count=0. */
 	if (ev->count == 0 && (m = wintomon(ev->window)))
 		drawbar(m);
 }
@@ -981,6 +996,8 @@ focus(Client *c)
 		detachstack(c);
 		attachstack(c);
 		grabbuttons(c, 1);
+		/* XPM 4.3.2: Unlike changes to the window background, changes to
+		 * window's border attributes are reflected immediately. */
 		XSetWindowBorder(dpy, c->win, scheme[SchemeSel][ColBorder].pixel);
 		setfocus(c);
 	} else {
@@ -1020,19 +1037,16 @@ focusstack(const Arg *arg)
 {
 	Client *c = NULL, *i;
 
-  infof("focusstack(): ");
 	if (!selmon->sel) {
-    infof("no sel\n");
 		return;
-  }
+	}
 
 	if (arg->i > 0) {
-    infof("↓ ");
 		for (c = selmon->sel->next; c && !ISVISIBLE(c); c = c->next);
 		if (!c)
 			for (c = selmon->clients; c && !ISVISIBLE(c); c = c->next);
-	} else {
-    infof("↑ ");
+	}
+	 else {
 		for (i = selmon->clients; i != selmon->sel; i = i->next) {
 			if (ISVISIBLE(i))
 				c = i;
@@ -1043,13 +1057,9 @@ focusstack(const Arg *arg)
 					c = i;
 	}
 	if (c) {
-    infof("found client ");
-    logclient(c, 0);
-    infof("\n");
 		focus(c);
 		restack(selmon);
 	}
-  infof("\n");
 }
 
 Atom
@@ -1217,7 +1227,6 @@ killclient(const Arg *arg)
 void
 manage(Window w, XWindowAttributes *wa)
 {
-  infof("manage(): w = %lu\n", w);
 	Client *c, *t = NULL;
 	Window trans = None;
 	XWindowChanges wc;
@@ -1232,7 +1241,7 @@ manage(Window w, XWindowAttributes *wa)
 	c->oldbw = wa->border_width;
 	c->cfact = 1.0;
 
-	updatetitle(c); /* set c->name */
+	updatetitle(c); /* sets c->name */
 	if (XGetTransientForHint(dpy, w, &trans) && (t = wintoclient(trans))) {
 		/* this branch is ostensibly related to popups of some kind. See ICCCM 4.1.2.6. */
 		c->mon = t->mon;
@@ -1291,6 +1300,10 @@ manage(Window w, XWindowAttributes *wa)
 void
 mappingnotify(XEvent *e)
 {
+	/* XPM 8.3.1: MappingNotify indicates that the keyboard mapping or pointer
+	 * mapping has changed. This event is reported to all clients by the server
+	 * when any client changes those mappings (e.g. via setxkbmap). */
+
 	XMappingEvent *ev = &e->xmapping;
 
 	XRefreshKeyboardMapping(ev);
@@ -1307,10 +1320,14 @@ maprequest(XEvent *e)
 
 	if (!XGetWindowAttributes(dpy, ev->window, &wa))
 		return;
+
+	/* By design of dwm, windows whose override_redirect flag is set shall not be
+	 * managed by it. */
 	if (wa.override_redirect)
 		return;
-		if (!wintoclient(ev->window))
-			manage(ev->window, &wa);
+
+	if (!wintoclient(ev->window))
+		manage(ev->window, &wa);
 }
 
 /*
@@ -1486,12 +1503,11 @@ propertynotify(XEvent *e)
 	Window trans;
 	XPropertyEvent *ev = &e->xproperty;
 
-	/* update status (unless a fake signal was received) */
 	if ((ev->window == root) && (ev->atom == XA_WM_NAME)) {
+		/* update status (unless a fake signal was received) */
 		if (!fakesignal())
 			updatestatus();
 	}
-
 	else if (ev->state == PropertyDelete)
 		return; /* ignore */
 	else if ((c = wintoclient(ev->window))) {
@@ -1507,10 +1523,13 @@ propertynotify(XEvent *e)
 			break;
 		case XA_WM_HINTS:
 			updatewmhints(c);
-			drawbars();
+			drawbars(); /* Indicate new urgent windows */
 			break;
 		}
+		/* Note that the atoms below are not included in the switch statement
+		 * because their values not compile-time constants (no built-in atoms). */
 		if (ev->atom == XA_WM_NAME || ev->atom == netatom[NetWMName]) {
+			/* Update client's preferred display name */
 			updatetitle(c);
 			if (c == c->mon->sel)
 				drawbar(c->mon);
@@ -1544,18 +1563,9 @@ recttomon(int x, int y, int w, int h)
 void
 resize(Client *c, int x, int y, int w, int h, int interact)
 {
-  infof("resize(): client ");
-  logclient(c, 0);
-  infof(", interact = %d\n", interact);
 	if (applysizehints(c, &x, &y, &w, &h, interact)) {
-    infof("applysizehints() == true, ");
-    logclient(c, 0);
-    infof("\n");
-    resizeclient(c, x, y, w, h);
-  }
-  infof("applysizehints() == false, ");
-  logclient(c, 0);
-  infof("\n");
+		resizeclient(c, x, y, w, h);
+	}
 }
 
 /*
@@ -1687,7 +1697,7 @@ scan(void)
 	if (XQueryTree(dpy, root, &d1, &d2, &wins, &num)) {
 		for (i = 0; i < num; i++) {
 			if (!XGetWindowAttributes(dpy, wins[i], &wa)
-			|| wa.override_redirect || XGetTransientForHint(dpy, wins[i], &d1))
+				|| wa.override_redirect || XGetTransientForHint(dpy, wins[i], &d1))
 				continue;
 			if (wa.map_state == IsViewable || getstate(wins[i]) == IconicState)
 				manage(wins[i], &wa);
@@ -1891,6 +1901,7 @@ setup(void)
 	wmatom[WMTakeFocus] = XInternAtom(dpy, "WM_TAKE_FOCUS", False);
 	netatom[NetActiveWindow] = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
 	netatom[NetSupported] = XInternAtom(dpy, "_NET_SUPPORTED", False);
+	/* win title; UTF-8 substitute of XA_WM_NAME */
 	netatom[NetWMName] = XInternAtom(dpy, "_NET_WM_NAME", False);
 	netatom[NetWMState] = XInternAtom(dpy, "_NET_WM_STATE", False);
 	netatom[NetWMCheck] = XInternAtom(dpy, "_NET_SUPPORTING_WM_CHECK", False);
@@ -1953,13 +1964,7 @@ showhide(Client *c)
 	if (!c)
 		return;
 
-  infof("showhide(): client ");
-  logclient(c, 0);
-  infof(", isvisible = %d\n", ISVISIBLE(c));
-  static int rec = 0;
-  rec += 1;
 	if (ISVISIBLE(c)) {
-
 		/* show clients top down */
 		XMoveWindow(dpy, c->win, c->x, c->y);
 		if ((!c->mon->lt[c->mon->sellt]->arrange || c->isfloating) && !c->isfullscreen)
@@ -2182,7 +2187,7 @@ void unmapnotify(XEvent *e) {
    * UnmapNotify gets triggered multiple times per closing window. Once for the
    * window itself, and once again due to it being a child of the root window.
    * as the WM is listening for SubstructureNotify events, which include
-   * StructureNotify events of _any_ of its children, right?
+   * events of any of the root's children, right?
    */
 
 	Client *c;
@@ -2201,6 +2206,11 @@ void unmapnotify(XEvent *e) {
 void
 updatebars(void)
 {
+	/* XPM 4.2: There are two structures associated with window attributes.
+	 * XWindowAttributes is a read-only structure that contains all the
+	 * attributes, while XSetWindowAttributes is a structure that only those
+	 * attributes that a program is allowed to set. */
+
 	Monitor *m;
 	XSetWindowAttributes wa = {
 		.override_redirect = True,
@@ -2225,6 +2235,8 @@ updatebars(void)
 void
 updatebarpos(Monitor *m)
 {
+	/* Set window area size to full monitor size and subtract extent of bar if
+	 * the bar is to be drawn. */
 	m->wy = m->my;
 	m->wh = m->mh;
 	if (m->showbar) {
@@ -2356,6 +2368,8 @@ updatesizehints(Client *c)
 		/* size is uninitialized, ensure that size.flags aren't used */
 		size.flags = PSize;
 
+	/* XPM 3.2.8: base_width/base_height takes priority over
+	 * min_width/max_width. Only one of these pairs should be set. */
 	if (size.flags & PBaseSize) {
 		c->basew = size.base_width;
 		c->baseh = size.base_height;
@@ -2392,7 +2406,7 @@ updatesizehints(Client *c)
 	} else
 		c->maxa = c->mina = 0.0;
 
-  /* Client has fixed size iff max = min in both dimensions */
+	/* Client has fixed size if max = min > 0 in both dimensions */
 	c->isfixed = (c->maxw && c->maxh && c->maxw == c->minw && c->maxh == c->minh);
 }
 
@@ -2435,10 +2449,17 @@ updatewmhints(Client *c)
 
 	if ((wmh = XGetWMHints(dpy, c->win))) {
 		if (c == selmon->sel && wmh->flags & XUrgencyHint) {
+			/* If the active window fancies itself urgent, clear its urgency
+			 * flag immediately, as there's no better measure to satisfy an
+			 * urgent window than to give it focus. .. */
 			wmh->flags &= ~XUrgencyHint;
 			XSetWMHints(dpy, c->win, wmh);
-		} else
+		} else {
+			/* .. otherwise simply set the urgency field. */
 			c->isurgent = (wmh->flags & XUrgencyHint) ? 1 : 0;
+		}
+
+		/* XPM 12.3.1.4.2: confuses me :( */
 		if (wmh->flags & InputHint)
 			c->neverfocus = !wmh->input;
 		else
