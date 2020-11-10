@@ -18,3 +18,8 @@ add_executable(dwm dwm.c drw.c util.c)
 target_link_libraries(dwm
     X11 fontconfig Xft Xinerama Xrender
 )
+
+option(XSYNCHRONIZE "Use X synchronous mode (debugging)" OFF)
+if(XSYNCHRONIZE)
+    target_compile_definitions(dwm PUBLIC XSYNCHRONIZE)
+endif()

@@ -1332,7 +1332,7 @@ manage(Window w, XWindowAttributes *wa)
 }
 
 void
-manageswallow(Client *s, Window w, XWindowAttributes *wa)
+manageswallow(Client *s, Window w, XWindowAttributes *wa /* unused? */)
 {
 	Client *c, **pc;
 	XWindowChanges wc;
@@ -1352,6 +1352,7 @@ manageswallow(Client *s, Window w, XWindowAttributes *wa)
 
 	/* Copy relevant fields from swallowing client. */
 	c->mon = s->mon;
+	//c->x = c->oldx = s->x;
 	c->x = c->oldx = s->x;
 	c->y = c->oldy = s->y;
 	c->w = c->oldw = s->w;
@@ -1370,9 +1371,6 @@ manageswallow(Client *s, Window w, XWindowAttributes *wa)
 	c->next = s->next;
 	detachstack(s);
 	attachstack(c);
-//	for (pc = &s->mon->stack; *pc && *pc != s; pc = &(*pc)->snext);
-//	*pc = c;
-//	c->snext = s->snext;
 
 	/* Border config */
 	wc.border_width = c->bw;
@@ -1390,8 +1388,14 @@ manageswallow(Client *s, Window w, XWindowAttributes *wa)
 	if (c->mon == selmon)
 		unfocus(selmon->sel, 0);
 	c->mon->sel = c;
-	arrange(c->mon);
-	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h); /* some windows require this */
+
+	/* arrange()'s call to resize() performs a XConfigureWindow only if the clients stored
+	 * position (c->x, c->y) does not match the target position. As we're copying the values
+	 * manually we need to call XMoveResizeWindow manually.
+	 * TODO: Do we need arrange() at all? */
+	// arrange(c->mon);
+	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h); // Why do I need this?!
+
 	XMapWindow(dpy, c->win);
 	XUnmapWindow(dpy, s->win);
 	focus(NULL);
@@ -2168,7 +2172,6 @@ tagmon(const Arg *arg)
 void
 tile(Monitor *m)
 {
-  infof("tile(): ");
 	unsigned int i, n, h, mw, my, ty;
 	float mfacts = 0, sfacts = 0;
 	Client *c;
@@ -2187,20 +2190,21 @@ tile(Monitor *m)
 	else
 		mw = m->ww - m->gappx;
 
-	for (i = 0, my = ty = m->gappx, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++)
+	for (i = 0, my = ty = m->gappx, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++) {
 		if (i < m->nmaster) {
-      h = (m->wh - my) * (c->cfact / mfacts) - m->gappx;
+			h = (m->wh - my) * (c->cfact / mfacts) - m->gappx;
 			resize(c, m->wx + m->gappx, m->wy + my, mw - (2*c->bw) - m->gappx, h - (2*c->bw), 0);
 			my += HEIGHT(c) + m->gappx;
 
-      mfacts -= c->cfact;
+			mfacts -= c->cfact;
 		} else {
-      h = (m->wh - ty) * (c->cfact / sfacts) - m->gappx;
+			h = (m->wh - ty) * (c->cfact / sfacts) - m->gappx;
 			resize(c, m->wx + mw + m->gappx, m->wy + ty, m->ww - mw - (2*c->bw) - 2*m->gappx, h - (2*c->bw), 0);
 			ty += HEIGHT(c) + m->gappx;
 
-      sfacts -= c->cfact;
+			sfacts -= c->cfact;
 		}
+	}
 }
 
 void
@@ -2735,6 +2739,9 @@ main(int argc, char *argv[])
 		fputs("warning: no locale support\n", stderr);
 	if (!(dpy = XOpenDisplay(NULL)))
 		die("dwm: cannot open display");
+#ifdef XSYNCHRONIZE
+	XSynchronize(dpy, 1);
+#endif
 	checkotherwm();
 	setup();
 #ifdef __OpenBSD__

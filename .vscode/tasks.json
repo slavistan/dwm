@@ -9,7 +9,10 @@
                 "-D", "CMAKE_BUILD_TYPE=Debug"
             ],
             "options": {
-                "cwd": "${workspaceFolder}"
+                "cwd": "${workspaceFolder}",
+                "statusbar": {
+                    "hide" : true
+                  }
             },
             "problemMatcher": []
         },
@@ -25,6 +28,23 @@
                 "cwd": "${workspaceFolder}"
             },
             "problemMatcher": []
+        },
+        {
+            "label": "kill.clients",
+            "type": "shell",
+            "dependsOn": [],
+            "command": "test/test.sh",
+            "args": [
+                "kill", "clients"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "silent",
+                "clear": true
+            }
         }
     ],
     "version": "2.0.0"
