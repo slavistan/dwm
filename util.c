@@ -82,7 +82,7 @@ strnfy_client(char* str, size_t size, Client *c) {
         (void*)c->snext,
         (void*)c->mon,
         c->win,
-        c->swallowing);
+        c->swallowedby);
 }
 
 void

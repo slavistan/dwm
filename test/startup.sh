@@ -4,25 +4,19 @@
 
 MYPATH=${0:A:h}
 
-startup() {
-  export DISPLAY=:4
+errln() { echo "\033[31;1m[ERR ]\033[0m $@"; }
+logln() { echo "\033[32;1m[INFO]\033[0m $@"; }
+die() { echo "$@"; exit 1; }
 
-  app1=gnome-mahjongg
-  app2=evince
-
-  $app1 >/dev/null 2>&1 &
-  pid1=$!
-  wid1=$(xdotool search --pid $pid1 --sync | head -1)
-  $app2 >/dev/null 2>&1 &
-  pid2=$!
-  wid2=$(xdotool search --pid $pid2 --sync | head -1)
-  printf "wid1= '$wid1', wid2= '$wid2'\n"
-  zsh-xi st <<EOF &
-wid1="$wid1"
-wid2="$wid2"
-echo "wid1=$wid1"
-echo "wid2=$wid2"
+_test_swallowfloating() {
+  zsh-xi st -n st-float-dingo <<"EOF" &
+wid=$(xdotool search --classname st-float-dingo)
+echo "I am window $wid"
+xsetroot -name ::swallownext:$wid
 EOF
+	xdotool search --classname st-float-dingo --sync
+	sleep 1
+	zathura &
 }
 
 launchdwm() {
@@ -58,6 +52,12 @@ launchxephyr() {
 }
 
 case "$1" in
+  test)
+    shift
+    [ ! $# -eq 1 ] && die "Usage: $0 test <NAME>"
+	export DISPLAY=:4
+    _test_$1
+    ;;
   *)
     "$@"
     ;;

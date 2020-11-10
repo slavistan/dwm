@@ -257,6 +257,7 @@ static int depth;
 static Colormap cmap;
 
 char logfilepath[128];
+static Client *swallownext;
 
 /* configuration, allows nested code to access above variables */
 #include "config.h"
@@ -265,6 +266,10 @@ char logfilepath[128];
 struct NumTags { char limitexceeded[LENGTH(tags) > 31 ? -1 : 1]; };
 
 /* function implementations */
+
+/*
+ * Applies per-window rules defined in config.h
+ */
 void
 applyrules(Client *c)
 {
@@ -278,6 +283,8 @@ applyrules(Client *c)
 	c->isfloating = 0;
 	c->tags = 0;
 	XGetClassHint(dpy, c->win, &ch);
+
+	/* Label clients which don't define a class or instance name as broken. */
 	class    = ch.res_class ? ch.res_class : broken;
 	instance = ch.res_name  ? ch.res_name  : broken;
 
@@ -603,7 +610,7 @@ clientmessage(XEvent *e)
 }
 
 /*
- * Inform client window about it's (new) geometry via ConfigureNotify event, right?
+ * Inform client window about it's (new) geometry via synthetic ConfigureNotify
  */
 void
 configure(Client *c)
@@ -973,6 +980,18 @@ fakesignal(void)
         return 1;
 
       resizeclient(cc, 20, 100, 300, 300);
+    } else if (*p == ':' && !strcmp(buf, "swallownext")) {
+      Window winclient;
+      Client *cc;
+
+      winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
+      if (*q != '\0')
+        return 1;
+
+      if ((cc = wintoclient(winclient)) == NULL)
+        return 1;
+
+      swallownext = cc;
     }
     return 1;
 	}
@@ -1312,6 +1331,71 @@ manage(Window w, XWindowAttributes *wa)
 	focus(NULL);
 }
 
+void
+manageswallow(Client *s, Window w, XWindowAttributes *wa)
+{
+	Client *c, **pc;
+	XWindowChanges wc;
+
+	/* Check whether existing client and new window are suitable targets for
+	 * swallowing.  Remove anything non-trivial, namely
+	 *   - fullscreen swallowers
+	 *   - fullscreen swallowees (see updatewindowtype())
+	 *   - fixed-size swallowees
+	 *   - transient windows (swers and swees)
+	 *   - weirdos (InputHint, check updatewmhints())
+	 */
+
+	c = ecalloc(1, sizeof(Client));
+	c->win = w;
+	c->swallowedby = s;
+
+	/* Copy relevant fields from swallowing client. */
+	c->mon = s->mon;
+	c->x = c->oldx = s->x;
+	c->y = c->oldy = s->y;
+	c->w = c->oldw = s->w;
+	c->h = c->oldh = s->h;
+	c->isfloating = s->isfloating;
+	c->bw = s->bw;
+	c->oldbw = s->oldbw;
+	c->cfact = s->cfact;
+	c->tags = s->tags;
+
+	updatetitle(c);
+
+	/* Swap in new client into the lists. */
+	for (pc = &s->mon->clients; *pc && *pc != s; pc = &(*pc)->next);
+	*pc = c;
+	c->next = s->next;
+	detachstack(s);
+	attachstack(c);
+//	for (pc = &s->mon->stack; *pc && *pc != s; pc = &(*pc)->snext);
+//	*pc = c;
+//	c->snext = s->snext;
+
+	/* Border config */
+	wc.border_width = c->bw;
+	XConfigureWindow(dpy, w, CWBorderWidth, &wc);
+	XSetWindowBorder(dpy, w, scheme[SchemeNorm][ColBorder].pixel);
+	configure(c);
+	updatesizehints(c);
+	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask);
+	grabbuttons(c, 0);
+	if (c->isfloating)
+		XRaiseWindow(dpy, c->win);
+	XChangeProperty(dpy, root, netatom[NetClientList], XA_WINDOW, 32, PropModeAppend,
+		(unsigned char *) &(c->win), 1);
+	setclientstate(c, NormalState);
+	if (c->mon == selmon)
+		unfocus(selmon->sel, 0);
+	c->mon->sel = c;
+	arrange(c->mon);
+	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h); /* some windows require this */
+	XMapWindow(dpy, c->win);
+	XUnmapWindow(dpy, s->win);
+	focus(NULL);
+}
 
 void
 mappingnotify(XEvent *e)
@@ -1342,8 +1426,15 @@ maprequest(XEvent *e)
 	if (wa.override_redirect)
 		return;
 
-	if (!wintoclient(ev->window))
-		manage(ev->window, &wa);
+	if (!wintoclient(ev->window)) {
+		if (!swallownext) {
+			manage(ev->window, &wa);
+		}
+		else {
+			manageswallow(swallownext, ev->window, &wa);
+			swallownext = NULL;
+		}
+	}
 }
 
 /*

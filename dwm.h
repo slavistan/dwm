@@ -36,7 +36,7 @@ struct Client {
 	int isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen;
 	Client *next; /* next client in list */
 	Client *snext; /* next client in focus stack */
-	Client *swallowing; /* client hidden behind me */
+	Client *swallowedby; /* client hidden behind me */
 	Monitor *mon; /* monitor for this client */
 	Window win; /* window id */
 };
