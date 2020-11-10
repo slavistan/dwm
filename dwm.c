@@ -698,7 +698,10 @@ configurerequest(XEvent *e)
 			if ((c->y + c->h) > m->my + m->mh && c->isfloating)
 				c->y = m->my + (m->mh / 2 - HEIGHT(c) / 2); /* center in y direction */
 
-      // ?? What's special about moving a window vs. changin its size?
+			/* ICCCM 4.1.5: If moving a client without resizing it or changing
+			 * its border width, the client shall receive a synthetic
+			 * ConfigureNotify event that describes the new geometry of the
+			 * window. */
 			if ((ev->value_mask & (CWX|CWY)) && !(ev->value_mask & (CWWidth|CWHeight)))
 				configure(c);
 
@@ -708,9 +711,10 @@ configurerequest(XEvent *e)
 				XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
 		}
 		else {
-			// Let the client know that .. nothing happend? Is the XSendEvent() of a
-			// synthetic configure event a way to communicate to the window that
-			// its configure request has been ignored?
+			/* Refuse any move/resize requests for tiled windows. This refusal
+			 * is communicated to the client via a synthetic ConfigureNotify
+			 * event that describes the unchanged geometry of the window. See
+			 * ICCCM 4.1.5. */
 			configure(c);
 		}
 	}
@@ -980,15 +984,16 @@ fakesignal(void)
 void
 focus(Client *c)
 {
+	/* If no client or an invisible one is to be focused, attempt to find the
+	 * next visible client on the currently selected monitor. */
 	if (!c || !ISVISIBLE(c))
 		for (c = selmon->stack; c && !ISVISIBLE(c); c = c->snext);
 
+	/* Unfocus the possibly focused clients. */
 	if (selmon->sel && selmon->sel != c)
 		unfocus(selmon->sel, 0);
 
 	if (c) {
-    logclient(c, 1);
-    logclientlist(c->mon->clients);
 		if (c->mon != selmon)
 			selmon = c->mon;
 		if (c->isurgent)
@@ -1213,6 +1218,12 @@ killclient(const Arg *arg)
 {
 	if (!selmon->sel)
 		return;
+	/* If the client does not participate in the WM_DELETE_WINDOW protocol
+	 * perform a default execution, otherwise send it the corresponding event.
+	 * Window managers should not use XDestroyWindow() on a window that
+	 * has WM_DELETE_WINDOW in its WM_PROTOCOLS property (XPM 12.3.3.2.3), why
+	 * presumably applies to XKillClient().
+	 * */
 	if (!sendevent(selmon->sel, wmatom[WMDelete])) {
 		XGrabServer(dpy);
 		XSetErrorHandler(xerrordummy);
@@ -1243,7 +1254,8 @@ manage(Window w, XWindowAttributes *wa)
 
 	updatetitle(c); /* sets c->name */
 	if (XGetTransientForHint(dpy, w, &trans) && (t = wintoclient(trans))) {
-		/* this branch is ostensibly related to popups of some kind. See ICCCM 4.1.2.6. */
+		/* If 'w' is a transient window (e.g. pop-up, dialogue box, ..) on behalf of an existing
+		 * top-level window 'trans' map it to the same tags and monitors. See ICCCM 4.1.2.6. */
 		c->mon = t->mon;
 		c->tags = t->tags;
 	} else {
@@ -1287,7 +1299,11 @@ manage(Window w, XWindowAttributes *wa)
 	XChangeProperty(dpy, root, netatom[NetClientList], XA_WINDOW, 32, PropModeAppend,
 		(unsigned char *) &(c->win), 1);
 	XMoveResizeWindow(dpy, c->win, c->x + 2 * sw, c->y, c->w, c->h); /* some windows require this */
+
+	/* ICCCM 4.1.3.1: The window manager will palce a WM_STATE property on each
+	 * top-level client window that is not in the withdrawn state. */
 	setclientstate(c, NormalState);
+
 	if (c->mon == selmon)
 		unfocus(selmon->sel, 0);
 	c->mon->sel = c;
@@ -1514,8 +1530,10 @@ propertynotify(XEvent *e)
 		switch(ev->atom) {
 		default: break;
 		case XA_WM_TRANSIENT_FOR:
-			if (!c->isfloating && (XGetTransientForHint(dpy, c->win, &trans)) &&
-				(c->isfloating = (wintoclient(trans)) != NULL))
+			// If an non-floating existing, managed window chooses to act on behalf of another
+			// existing, managed window make the window float and rearrange tiles. lolwat?
+			if (!c->isfloating && XGetTransientForHint(dpy, c->win, &trans)
+				&& (c->isfloating = (wintoclient(trans) != NULL)))
 				arrange(c->mon);
 			break;
 		case XA_WM_NORMAL_HINTS:
@@ -1734,6 +1752,9 @@ sendmon(Client *c, Monitor *m)
 	arrange(NULL);
 }
 
+/*
+ * Change client's WM_STATE property
+ */
 void
 setclientstate(Client *c, long state)
 {
@@ -1777,6 +1798,9 @@ setfocus(Client *c)
 			XA_WINDOW, 32, PropModeReplace,
 			(unsigned char *) &(c->win), 1);
 	}
+
+	/* If the client participates in WM_TAKE_FOCUS send the appropriate
+	 * message. See XPM 12.3.3.2.1 */
 	sendevent(c, wmatom[WMTakeFocus]);
 }
 
@@ -2195,6 +2219,10 @@ void unmapnotify(XEvent *e) {
 
 	if ((c = wintoclient(ev->window))) {
 		if (ev->send_event) {
+			/* ICCCM 4.1.4:  When chaning the state of the window to Withdrawn,
+			 * the client must (in addition to unmapping the window) send a
+			 * synthetic UnmapNotify event to the root using a SendEvent
+			 * request. */
 			setclientstate(c, WithdrawnState);
 		}
 		else {
@@ -2424,6 +2452,7 @@ updatestatus(void)
 void
 updatetitle(Client *c)
 {
+	// TODO: Prefix with WM_CLASS
 	if (!gettextprop(c->win, netatom[NetWMName], c->name, sizeof c->name))
 		gettextprop(c->win, XA_WM_NAME, c->name, sizeof c->name);
 	if (c->name[0] == '\0') /* hack to mark broken clients */
