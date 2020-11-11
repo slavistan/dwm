@@ -45,6 +45,23 @@
                 "reveal": "silent",
                 "clear": true
             }
+        },
+        {
+            "label": "launch.xephyr",
+            "type": "shell",
+            "dependsOn": [],
+            "command": "test/test.sh",
+            "args": [
+                "launch", "xephyr"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "clear": true
+            }
         }
     ],
     "version": "2.0.0"

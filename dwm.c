@@ -1389,12 +1389,15 @@ manageswallow(Client *s, Window w, XWindowAttributes *wa /* unused? */)
 		unfocus(selmon->sel, 0);
 	c->mon->sel = c;
 
-	/* arrange()'s call to resize() performs a XConfigureWindow only if the clients stored
-	 * position (c->x, c->y) does not match the target position. As we're copying the values
-	 * manually we need to call XMoveResizeWindow manually.
-	 * TODO: Do we need arrange() at all? */
-	// arrange(c->mon);
-	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h); // Why do I need this?!
+	/* Contrasting manage()'s implementation we need to explicitly resize the
+	 * window which in manage()'s implementation is done via its call to
+	 * arrange(). Deep down arrange() reconfigures the window only if the
+	 * client's stored state (c->x, etc) does not match the desired geometry.
+	 * As we've copied the configuration of an existing window, arrange() won't
+	 * do anything here. Thus we call XMoveResize() explicitly and omit
+	 * arrange(). */
+	// arrange(c->mon); // Remove eventually if not needed
+	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
 
 	XMapWindow(dpy, c->win);
 	XUnmapWindow(dpy, s->win);

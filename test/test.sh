@@ -8,7 +8,7 @@ errln() { echo "\033[31;1m[ERR ]\033[0m $@"; }
 logln() { echo "\033[32;1m[INFO]\033[0m $@"; }
 die() { echo "$@"; exit 1; }
 
-_test_swallowtiling() {
+_test_swallow_tiling() {
 	zsh-xi st -n bingo <<"EOF" &
 wid=$(xdotool search --classname bingo)
 echo "I am window $wid"
@@ -19,7 +19,7 @@ EOF
 	zathura &
 }
 
-_test_swallowfloating() {
+_test_swallow_floating() {
 	zsh-xi st -n st-float-dingo <<"EOF" &
 wid=$(xdotool search --classname st-float-dingo)
 echo "I am window $wid"
@@ -60,24 +60,27 @@ _launch_xephyr() {
 	DISPLAY=:0 Xephyr -br -ac -reset -resizeable :4 &
 }
 
+
 export DISPLAY=:4
 case "$1" in
 	test)
 		shift
-		[ ! $# -eq 1 ] && die "Usage: $0 test <NAME>"
-		_test_$1
+		[ ! $# -eq 1 ] && die "Usage: $0 test WHAT..."
+		"_test_${*:gs/ /_}"
 		;;
 	launch)
 		shift
-		[ ! $# -eq 1 ] && die "Usage: $0 launch <NAME>"
+		[ ! $# -eq 1 ] && die "Usage: $0 launch WHAT"
 		_launch_$1
 		;;
 	kill)
 		shift
-		[ ! $# -eq 1 ] && die "Usage: $0 kill <NAME>"
+		[ ! $# -eq 1 ] && die "Usage: $0 kill WHAT"
 		_kill_$1
 		;;
 	*)
 		"$@"
 		;;
 esac
+
+sleep 0.1 # vscode unfuck for background processes
