@@ -195,6 +195,7 @@ static void toggletag(const Arg *arg);
 static void toggleview(const Arg *arg);
 static void unfocus(Client *c, int setfocus);
 static void unmanage(Client *c, int destroyed);
+static void unmanageswallow(Client *c, int destroyed);
 static void unmapnotify(XEvent *e);
 static void updatebarpos(Monitor *m);
 static void updatebars(void);
@@ -2322,7 +2323,48 @@ unmanage(Client *c, int destroyed)
 
 }
 
-void unmapnotify(XEvent *e) {
+void
+unmanageswallow(Client *c, int destroyed)
+{
+	Window w;
+	XWindowChanges wc;
+
+	/* Swap in the other window */
+	w = c->win;
+	c->win = c->swallowedby->win;
+	updatetitle(c);
+
+	/* Border config */
+	wc.border_width = c->bw;
+	XConfigureWindow(dpy, c->w, CWBorderWidth, &wc);
+	XSetWindowBorder(dpy, c->w, scheme[SchemeNorm][ColBorder].pixel);
+	configure(c);
+	updatesizehints(c);
+
+	if (!destroyed) {
+		wc.border_width = c->oldbw;
+		XGrabServer(dpy); /* avoid race conditions */
+		XSetErrorHandler(xerrordummy);
+
+    // Why restore the border? And why not use XSetWindowBorderWidth() directly?
+		XConfigureWindow(dpy, w, CWBorderWidth, &wc); /* restore border */
+		XUngrabButton(dpy, AnyButton, AnyModifier, w);
+		setclientstate(c->swallowedby, WithdrawnState);
+		XSync(dpy, False);
+		XSetErrorHandler(xerror);
+		XUngrabServer(dpy);
+	}
+
+	free(c->swallowedby);
+	c->swallowedby = NULL;
+	focus(NULL);
+	updateclientlist();
+	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
+	XMapWindow(dpy, c->win);
+}
+
+void
+unmapnotify(XEvent *e) {
   /*
    * UnmapNotify gets triggered multiple times per closing window. Once for the
    * window itself, and once again due to it being a child of the root window.
@@ -2335,14 +2377,17 @@ void unmapnotify(XEvent *e) {
 
 	if ((c = wintoclient(ev->window))) {
 		if (ev->send_event) {
-			/* ICCCM 4.1.4:  When chaning the state of the window to Withdrawn,
-			 * the client must (in addition to unmapping the window) send a
-			 * synthetic UnmapNotify event to the root using a SendEvent
+			/* ICCCM 4.1.4:  When changing the state of the window to
+			 * Withdrawn, the client must (in addition to unmapping the window)
+			 * send a synthetic UnmapNotify event to the root using a SendEvent
 			 * request. */
 			setclientstate(c, WithdrawnState);
 		}
-		else {
+		else if (!c->swallowedby) {
 			unmanage(c, 0);
+		}
+		else {
+			unmanageswallow(c, 0);
 		}
 	}
 }

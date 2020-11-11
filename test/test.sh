@@ -65,7 +65,7 @@ export DISPLAY=:4
 case "$1" in
 test)
 	shift
-	[ ! $# -eq 1 ] && die "Usage: $0 test WHAT..."
+	[ $# -eq 0 ] && die "Usage: $0 test WHAT..."
 	"_test_${*:gs/ /_}"
 	;;
 launch)
