@@ -769,7 +769,10 @@ destroynotify(XEvent *e)
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
 
 	if ((c = wintoclient(ev->window))) {
-	  unmanage(c, 1);
+		if (!c->swallowedby)
+			  unmanage(c, 1);
+		else
+			unmanageswallow(c, 1);
 	}
 }
 
