@@ -226,6 +226,7 @@ static int lrpad;            /* sum of left and right padding for tag text */
 static int (*xerrorxlib)(Display *, XErrorEvent *);
 static unsigned int numlockmask = 0;
 static void (*handler[LASTEvent]) (XEvent *) = {
+	// How are CirculateRequest handled?
 	[ButtonPress] = buttonpress,
 	[ClientMessage] = clientmessage,
 	[ConfigureRequest] = configurerequest,
@@ -1334,6 +1335,7 @@ manage(Window w, XWindowAttributes *wa)
 void
 manageswallow(Client *s, Window w, XWindowAttributes *wa /* unused? */)
 {
+	// TODO: Which window attributes may be use without ruining the swallow feature? Border width?
 	Client *c, **pc;
 	XWindowChanges wc;
 
@@ -1762,6 +1764,7 @@ resizemouse(const Arg *arg)
 void
 restack(Monitor *m)
 {
+	// When does is become necessary to restack?
 	Client *c;
 	XEvent ev;
 	XWindowChanges wc;
@@ -1769,8 +1772,13 @@ restack(Monitor *m)
 	drawbar(m);
 	if (!m->sel)
 		return;
+
+	/* If selected window is floating raise it to the top. */
 	if (m->sel->isfloating || !m->lt[m->sellt]->arrange)
 		XRaiseWindow(dpy, m->sel->win);
+
+	/* Apply stacking order as represented by the stack list to all tiled
+	 * windows, beginning at the bar. */
 	if (m->lt[m->sellt]->arrange) {
 		wc.stack_mode = Below;
 		wc.sibling = m->barwin;
@@ -1782,7 +1790,8 @@ restack(Monitor *m)
 		}
 	}
 	XSync(dpy, False);
-	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
+
+	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev)); //What's that for?
 }
 
 void
@@ -2057,6 +2066,15 @@ setup(void)
 	XDeleteProperty(dpy, root, netatom[NetClientList]);
 	/* select events */
 	wa.cursor = cursor[CurNormal]->cursor;
+
+	/* XPM 16.2: The structure is the location, size, stacking order, border
+	 * width, and mapping status of a window. The substructure is all these
+	 * statistics about the children of a particular window. This is the
+	 * complete set of information about screen layout that the window manager
+	 * might need in order to implement its policy. Redirection means that an
+	 * event is sent to the client selecting redirection (usually the window
+	 * manager), and the original structure−changing request is not executed.
+	 * */
 	wa.event_mask = SubstructureRedirectMask|SubstructureNotifyMask
 		|ButtonPressMask|PointerMotionMask|EnterWindowMask
 		|LeaveWindowMask|StructureNotifyMask|PropertyChangeMask;

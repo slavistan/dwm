@@ -63,24 +63,24 @@ _launch_xephyr() {
 
 export DISPLAY=:4
 case "$1" in
-	test)
-		shift
-		[ ! $# -eq 1 ] && die "Usage: $0 test WHAT..."
-		"_test_${*:gs/ /_}"
-		;;
-	launch)
-		shift
-		[ ! $# -eq 1 ] && die "Usage: $0 launch WHAT"
-		_launch_$1
-		;;
-	kill)
-		shift
-		[ ! $# -eq 1 ] && die "Usage: $0 kill WHAT"
-		_kill_$1
-		;;
-	*)
-		"$@"
-		;;
+test)
+	shift
+	[ ! $# -eq 1 ] && die "Usage: $0 test WHAT..."
+	"_test_${*:gs/ /_}"
+	;;
+launch)
+	shift
+	[ ! $# -eq 1 ] && die "Usage: $0 launch WHAT"
+	_launch_$1
+	;;
+kill)
+	shift
+	[ ! $# -eq 1 ] && die "Usage: $0 kill WHAT"
+	_kill_$1
+	;;
+*)
+	"$@"
+	;;
 esac
 
 sleep 0.1 # vscode unfuck for background processes
