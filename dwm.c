@@ -755,7 +755,7 @@ createmon(void)
 	m->nmaster = nmaster;
 	m->showbar = showbar;
 	m->topbar = topbar;
-  m->gappx = gappx;
+	m->gappx = gappx;
 	m->lt[0] = &layouts[0];
 	m->lt[1] = &layouts[1 % LENGTH(layouts)];
 	strncpy(m->ltsymbol, layouts[0].symbol, sizeof m->ltsymbol);
@@ -1358,7 +1358,6 @@ manageswallow(Client *s, Window w, XWindowAttributes *wa /* unused? */)
 
 	/* Copy relevant fields from swallowing client. */
 	c->mon = s->mon;
-	//c->x = c->oldx = s->x;
 	c->x = c->oldx = s->x;
 	c->y = c->oldy = s->y;
 	c->w = c->oldw = s->w;
@@ -2349,7 +2348,7 @@ unmanageswallow(Client *c, int destroyed)
 		XGrabServer(dpy); /* avoid race conditions */
 		XSetErrorHandler(xerrordummy);
 
-    // Why restore the border? And why not use XSetWindowBorderWidth() directly?
+		// Why restore the border? And why not use XSetWindowBorderWidth() directly?
 		XConfigureWindow(dpy, w, CWBorderWidth, &wc); /* restore border */
 		XUngrabButton(dpy, AnyButton, AnyModifier, w);
 		setclientstate(c->swallowedby, WithdrawnState);
@@ -2364,6 +2363,8 @@ unmanageswallow(Client *c, int destroyed)
 	updateclientlist();
 	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
 	XMapWindow(dpy, c->win);
+
+	// Redraw other monitor? arrange(NULL);
 }
 
 void

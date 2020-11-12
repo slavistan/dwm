@@ -59,7 +59,7 @@
             },
             "problemMatcher": [],
             "presentation": {
-                "reveal": "always",
+                "reveal": "silent",
                 "clear": true
             }
         }
