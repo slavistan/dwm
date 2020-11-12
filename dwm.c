@@ -765,15 +765,30 @@ createmon(void)
 void
 destroynotify(XEvent *e)
 {
-	Client *c;
+	Client *c, *d;
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
 
-	if ((c = wintoclient(ev->window))) {
-		if (!c->swallowedby)
-			  unmanage(c, 1);
-		else
-			unmanageswallow(c, 1);
+	switch (wintoclient2(ev->window, &c)) {
+	default: /* no client */
+		break;
+	case 1: /* regular client */
+		unmanage(c, 1);
+		break;
+	case 2: /* swallowee */
+		unmanageswallow(c, 1);
+		break;
+	case 3: /* swallower */
+		d = c->swallowedby;
+		c->swallowedby = NULL;
+		// CONTHERE ... implementation of swallower destruction
+		break;
 	}
+	//if ((c = wintoclient(ev->window))) {
+	//	if (!c->swallowedby)
+	//		  unmanage(c, 1);
+	//	else
+	//		unmanageswallow(c, 1);
+	//}
 }
 
 /*
@@ -2443,6 +2458,7 @@ updatebarpos(Monitor *m)
 void
 updateclientlist()
 {
+	// TODO(swallow): Include possible swallowers in NetClientList list.
 	Client *c;
 	Monitor *m;
 
