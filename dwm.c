@@ -209,7 +209,7 @@ static void updatewindowtype(Client *c);
 static void updatewmhints(Client *c);
 static void view(const Arg *arg);
 static Client *wintoclient(Window w);
-static Client *wintoclient2(Window w);
+static int wintoclient2(Window w, Client **pc);
 static Monitor *wintomon(Window w);
 static int xerror(Display *dpy, XErrorEvent *ee);
 static int xerrordummy(Display *dpy, XErrorEvent *ee);
@@ -2685,6 +2685,34 @@ wintoclient(Window w)
 			if (c->win == w)
 				return c;
 	return NULL;
+}
+
+int
+wintoclient2(Window w, Client **pc)
+{
+	Monitor *m;
+	Client *c;
+
+	for (m = mons; m; m = m->next) {
+		for (c = m->clients; c; c = c->next) {
+			if (c->win == w) {
+				if (c->swallowedby) {
+					*pc = c;
+					return 1; /* regular client */
+				}
+				else {
+					*pc = c;
+					return 2; /* swallowee */
+				}
+			}
+			else if (c->swallowedby && c->swallowedby->win == w) {
+				*pc = c;
+				return 3; /* swallower */
+			}
+		}
+	}
+	*pc = NULL:
+	return 0; /* no match */
 }
 
 Monitor *
