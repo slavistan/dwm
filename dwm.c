@@ -765,7 +765,7 @@ createmon(void)
 void
 destroynotify(XEvent *e)
 {
-	Client *c, *d;
+	Client *c;
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
 
 	switch (wintoclient2(ev->window, &c)) {
@@ -778,17 +778,11 @@ destroynotify(XEvent *e)
 		unmanageswallow(c, 1);
 		break;
 	case 3: /* swallower */
-		d = c->swallowedby;
+		free(c->swallowedby);
 		c->swallowedby = NULL;
-		// CONTHERE ... implementation of swallower destruction
+		updateclientlist();
 		break;
 	}
-	//if ((c = wintoclient(ev->window))) {
-	//	if (!c->swallowedby)
-	//		  unmanage(c, 1);
-	//	else
-	//		unmanageswallow(c, 1);
-	//}
 }
 
 /*
@@ -2324,7 +2318,7 @@ unmanage(Client *c, int destroyed)
 		XGrabServer(dpy); /* avoid race conditions */
 		XSetErrorHandler(xerrordummy);
 
-    // Why restore the border? And why not use XSetWindowBorderWidth() directly?
+		// Why restore the border? And why not use XSetWindowBorderWidth() directly?
 		XConfigureWindow(dpy, c->win, CWBorderWidth, &wc); /* restore border */
 		XUngrabButton(dpy, AnyButton, AnyModifier, c->win);
 		setclientstate(c, WithdrawnState);
@@ -2727,7 +2721,7 @@ wintoclient2(Window w, Client **pc)
 			}
 		}
 	}
-	*pc = NULL:
+	*pc = NULL;
 	return 0; /* no match */
 }
 
@@ -2838,7 +2832,7 @@ zoom(const Arg *arg)
 int
 main(int argc, char *argv[])
 {
-/* Init logging */
+	// TODO: Clean up logging. Mb remove all the crap.
 	char *p;
 	if ((p = getenv("DISPLAY")) != NULL && strlen(p) >= 2 && p[0] == ':')
 		sprintf(logfilepath, LOGFILE_TEMPLATE, p+1);
@@ -2879,3 +2873,10 @@ main(int argc, char *argv[])
 //     2) On one monitor launch the application with a delay 'sleep 5; firefox google.com'
 //     3) Switch to the other monitor and show any tag not associated with the application
 //     => After sleep returns the dwm will switch tags on _both_ monitors.
+
+// TODO(bug): Resizing xephyr window seems to not propagate to dwm
+//	Steps to reproduce:
+//		1) Create a xephyr window and run dwm
+//		2) increase xephyr's window size and create a few clients
+//		3) clients cannot be focused by mouse click into the newly exposed area
+//		   or the wrong client gets focused
