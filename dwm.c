@@ -2452,16 +2452,29 @@ updatebarpos(Monitor *m)
 void
 updateclientlist()
 {
-	// TODO(swallow): Include possible swallowers in NetClientList list.
+	/* _NET_CLIENT_LIST contains all windows managed by the WM.
+	 * Shouldn't _NET_CLIENT_LIST_STACKING be used aswell? According to EWMH
+	 * spec: _NET_CLIENT_LIST has initial mapping order, starting with the
+	 * oldest window. _NET_CLIENT_LIST_STACKING has bottom-to-top stacking
+	 * order. */
 	Client *c;
 	Monitor *m;
 
 	XDeleteProperty(dpy, root, netatom[NetClientList]);
-	for (m = mons; m; m = m->next)
-		for (c = m->clients; c; c = c->next)
+	for (m = mons; m; m = m->next) {
+		for (c = m->clients; c; c = c->next) {
 			XChangeProperty(dpy, root, netatom[NetClientList],
 				XA_WINDOW, 32, PropModeAppend,
 				(unsigned char *) &(c->win), 1);
+
+			/* Include any swallowing windows, as we are managing the window. */
+			if (c->swallowedby) {
+				XChangeProperty(dpy, root, netatom[NetClientList],
+					XA_WINDOW, 32, PropModeAppend,
+					(unsigned char *) &(c->swallowedby->win), 1);
+			}
+		}
+	}
 }
 
 int
