@@ -111,6 +111,13 @@ typedef struct {
 	int monitor;
 } Rule;
 
+typedef struct Swallow Swallow;
+struct Swallow {
+	char filter[256]; /* WM_CLASS */
+	Client *client; /* swallower */
+	Swallow *next;
+};
+
 /* function declarations */
 static void applyrules(Client *c);
 static int applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
@@ -151,6 +158,7 @@ static void incnmaster(const Arg *arg);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
 static void manage(Window w, XWindowAttributes *wa);
+static void manageswallow(Client *c, Window w);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
 static void monocle(Monitor *m);
@@ -160,8 +168,10 @@ static void moveclient(const Arg *arg);
 static Client *nexttiled(Client *c);
 static void pop(Client *);
 static void propertynotify(XEvent *e);
+static void makeswallow(Client *c, const char* filter);
 static void quit(const Arg *arg);
 static Monitor *recttomon(int x, int y, int w, int h);
+static void removeswallow(Swallow *s);
 static void resize(Client *c, int x, int y, int w, int h, int interact);
 static void resizeclient(Client *c, int x, int y, int w, int h);
 static void resizemouse(const Arg *arg);
@@ -210,6 +220,7 @@ static void updatewmhints(Client *c);
 static void view(const Arg *arg);
 static Client *wintoclient(Window w);
 static int wintoclient2(Window w, Client **pc);
+static Swallow *wintoswallow(Window w);
 static Monitor *wintomon(Window w);
 static int xerror(Display *dpy, XErrorEvent *ee);
 static int xerrordummy(Display *dpy, XErrorEvent *ee);
@@ -252,6 +263,7 @@ Display *dpy;
 static Drw *drw;
 static Monitor *mons, *selmon; /* monitor list, selected monitor */
 static Window root, wmcheckwin;
+static Swallow *swallows; /* se-queue of swallows */
 
 static int useargb = 0;
 static Visual *visual;
@@ -933,8 +945,10 @@ fakesignal(void)
 	char *p, *q;
 
 	/* Get root name, find the indicator  */
-	if (gettextprop(root, XA_WM_NAME, rootname, sizeof(rootname)) &&
-			!strncmp(indicator ":", rootname, sizeof(indicator))) {
+	if (!gettextprop(root, XA_WM_NAME, rootname, sizeof(rootname)) ||
+		strncmp(indicator ":", rootname, sizeof(indicator))) {
+		return 1;
+	}
 
     /*
      * Syntax:
@@ -942,72 +956,60 @@ fakesignal(void)
      *  2. INDICATOR:COMMAND:VAL1:VAL2:...:VALN
      */
 
-    /* Retrieve colon-sep'd command string */
-    if ((p = strchr(rootname + sizeof(indicator), ':')) == NULL)
-      p = rootname + strlen(rootname); // syntax 1
-    n = p - (rootname + sizeof(indicator));
-    if (sizeof(buf)-1 < n)
-      return 1;
-    memcpy(buf, rootname + sizeof(indicator), n);
-    buf[n] = '\0';
+	/* Retrieve colon-sep'd command string */
+	if ((p = strchr(rootname + sizeof(indicator), ':')) == NULL)
+		p = rootname + strlen(rootname); // syntax 1
+	n = p - (rootname + sizeof(indicator));
+	if (sizeof(buf)-1 < n)
+		return 1;
+	memcpy(buf, rootname + sizeof(indicator), n);
+	buf[n] = '\0';
 
-    /* Parse args and dispatch commands */
-    if (*p == ':' && !strcmp(buf, "swallow")) {
-      Window winclient, winother;
-      Client *c, *o;
+	/* Parse args and dispatch commands */
+	if (*p == ':' && !strcmp(buf, "makeswallow")) {
+		Window winclient;
+		Client *c, *o;
 
-      winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
-      if (*q != ':' || p+1 == q)
-        return 1;
-      winother = strtoul(q+1, &p, 0);
-      if (*p != '\0')
-        return 1;
+		/* retrieve window ($1) */
+		winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
+		if (*q != ':' || p+1 == q)
+			return 1;
 
-      if(winother == winclient ||
-         (c = wintoclient(winclient)) == NULL ||
-         (o = wintoclient(winother)) == NULL) {
-        return 1;
-      }
+		switch (wintoclient2(winclient, &c)) {
+		case 1:
+			break;
+		case 2:
+		case 3:
+		default:
+			return 1;
+		}
 
-      //wallow(c, o);
-    } else if (*p == ':' && !strcmp(buf, "wininfo")) {
-      Window winclient;
-      Client *cc;
+		/* retrieve filter ($2) */
+		makeswallow(c, q+1);
+	} else if (*p == ':' && !strcmp(buf, "wininfo")) {
+		Window winclient;
+		Client *cc;
 
-      winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
-      if (*q != '\0')
-        return 1;
+		winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
+		if (*q != '\0')
+			return 1;
 
-      if ((cc = wintoclient(winclient)) == NULL)
-        return 1;
+		if ((cc = wintoclient(winclient)) == NULL)
+			return 1;
 
-      logclient(cc, 1);
-    } else if (*p == ':' && !strcmp(buf, "resizeclient")) {
-      Window winclient;
-      Client *cc;
+		logclient(cc, 1);
+	} else if (*p == ':' && !strcmp(buf, "resizeclient")) {
+		Window winclient;
+		Client *cc;
 
-      winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
-      if (*q != '\0')
-        return 1;
+		winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
+		if (*q != '\0')
+			return 1;
 
-      if ((cc = wintoclient(winclient)) == NULL)
-        return 1;
+		if ((cc = wintoclient(winclient)) == NULL)
+			return 1;
 
-      resizeclient(cc, 20, 100, 300, 300);
-    } else if (*p == ':' && !strcmp(buf, "swallownext")) {
-      Window winclient;
-      Client *cc;
-
-      winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
-      if (*q != '\0')
-        return 1;
-
-      if ((cc = wintoclient(winclient)) == NULL)
-        return 1;
-
-      swallownext = cc;
-    }
-    return 1;
+		resizeclient(cc, 20, 100, 300, 300);
 	}
 
 	/* No fake signal was sent, so proceed with update */
@@ -1346,7 +1348,7 @@ manage(Window w, XWindowAttributes *wa)
 }
 
 void
-manageswallow(Client *s, Window w, XWindowAttributes *wa /* unused? */)
+manageswallow(Client *s, Window w)
 {
 	// TODO: Which window attributes may be use without ruining the swallow feature? Border width?
 	Client *c, **pc;
@@ -1435,9 +1437,10 @@ mappingnotify(XEvent *e)
 void
 maprequest(XEvent *e)
 {
-	Client *c;
+	Client *c, **pc;
 	static XWindowAttributes wa;
 	XMapRequestEvent *ev = &e->xmaprequest;
+	Swallow *s;
 
 	if (!XGetWindowAttributes(dpy, ev->window, &wa))
 		return;
@@ -1447,15 +1450,33 @@ maprequest(XEvent *e)
 	if (wa.override_redirect)
 		return;
 
-	if (!wintoclient(ev->window)) {
-		if (!swallownext) {
-			manage(ev->window, &wa);
-		}
-		else {
-			manageswallow(swallownext, ev->window, &wa);
-			swallownext = NULL;
-		}
+	switch (wintoclient2(ev->window, &c)) {
+	case 3: /* swallower asks to be remapped */
+		c->swallowedby->mon = c->mon;
+		c->swallowedby->next = c->next;
+		c->next = c->swallowedby;
+		attachstack(c->swallowedby);
+		arrange(c->mon);
+		XMapWindow(dpy, c->swallowedby->win);
+		setclientstate(c->swallowedby, NormalState);
+		focus(NULL);
+		c->swallowedby = NULL;
+	case 1: /* regular client; fallthrough */
+	case 2: /* swallowee; fallthrough */
+		return;
+	default:
+		break; /* when would this ever happen? */
 	}
+
+	/* No client manages the new window. See if any swallow matches. */
+	if (!(s = wintoswallow(ev->window))) {
+		manage(ev->window, &wa);
+	}
+	else {
+		manageswallow(s->client, ev->window);
+		removeswallow(s);
+	}
+
 }
 
 /*
@@ -1657,7 +1678,8 @@ propertynotify(XEvent *e)
 			break;
 		}
 		/* Note that the atoms below are not included in the switch statement
-		 * because their values not compile-time constants (no built-in atoms). */
+		 * because their values are not compile-time constants (no built-in
+		 * atoms). */
 		if (ev->atom == XA_WM_NAME || ev->atom == netatom[NetWMName]) {
 			/* Update client's preferred display name */
 			updatetitle(c);
@@ -1667,6 +1689,21 @@ propertynotify(XEvent *e)
 		if (ev->atom == netatom[NetWMWindowType])
 			updatewindowtype(c);
 	}
+}
+
+void // move to alphabetical position
+makeswallow(Client *c, const char *filter)
+{
+	/* c must refer to a mapped, non-swallowed window */
+	// TODO: Ensure c is and filter are unique
+
+	Swallow *s;
+
+	s = ecalloc(1, sizeof(Swallow));
+	s->client = c;
+	strncpy(s->filter, filter, sizeof(s->filter));
+	s->next = swallows;
+	swallows = s;
 }
 
 void
@@ -1688,6 +1725,19 @@ recttomon(int x, int y, int w, int h)
 			r = m;
 		}
 	return r;
+}
+
+/*
+ * Detach swallow and free resources. Complement to makeswallow().
+ */
+void
+removeswallow(Swallow *s)
+{
+	Swallow **ps;
+
+	for (ps = &swallows; *ps && *ps != s; ps = &(*ps)->next);
+	*ps = s->next;
+	free(s);
 }
 
 void
@@ -2719,7 +2769,7 @@ wintoclient2(Window w, Client **pc)
 	for (m = mons; m; m = m->next) {
 		for (c = m->clients; c; c = c->next) {
 			if (c->win == w) {
-				if (c->swallowedby) {
+				if (!c->swallowedby) {
 					*pc = c;
 					return 1; /* regular client */
 				}
@@ -2736,6 +2786,27 @@ wintoclient2(Window w, Client **pc)
 	}
 	*pc = NULL;
 	return 0; /* no match */
+}
+
+Swallow *
+wintoswallow(Window w)
+{
+	XClassHint ch = { NULL, NULL };
+	Swallow *s;
+
+	XGetClassHint(dpy, w, &ch);
+
+	for (s = swallows; s; s = s->next) {
+		if (strstr(ch.res_name, s->filter))
+			break;
+	}
+
+	if (ch.res_class)
+		XFree(ch.res_class);
+	if (ch.res_name)
+		XFree(ch.res_name);
+
+	return s;
 }
 
 Monitor *

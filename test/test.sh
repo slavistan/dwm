@@ -60,6 +60,14 @@ _launch_xephyr() {
 	DISPLAY=:0 Xephyr -br -ac -reset -resizeable :4 &
 }
 
+_ls() {
+	export DISPLAY=:4
+	xdotool search --maxdepth 1 --name ".*" | while read w; do
+		name=$(xprop  -id $w | grep "WM_CLASS" | awk -F '= ' '{ print $2 }')
+		printf "$w\t'$name'\n"
+	done
+}
+
 
 export DISPLAY=:4
 case "$1" in
@@ -77,6 +85,10 @@ kill)
 	shift
 	[ ! $# -eq 1 ] && die "Usage: $0 kill WHAT"
 	_kill_$1
+	;;
+@)
+	shift
+	"$@"
 	;;
 *)
 	"$@"
