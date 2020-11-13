@@ -1695,9 +1695,15 @@ void // move to alphabetical position
 makeswallow(Client *c, const char *filter)
 {
 	/* c must refer to a mapped, non-swallowed window */
-	// TODO: Ensure c is and filter are unique
 
 	Swallow *s;
+
+	/* Ensure c and filter are unique */
+	for (s = swallows; s; s = s->next) {
+		if (s->client == c || !strcmp(s->filter, filter)) {
+			return;
+		}
+	}
 
 	s = ecalloc(1, sizeof(Swallow));
 	s->client = c;
