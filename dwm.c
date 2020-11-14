@@ -779,6 +779,7 @@ void
 destroynotify(XEvent *e)
 {
 	Client *c;
+	Swallow *s;
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
 
 	switch (wintoclient2(ev->window, &c)) {
@@ -786,6 +787,17 @@ destroynotify(XEvent *e)
 		break;
 	case 1: /* regular client */
 		unmanage(c, 1);
+		/* Remove queued swallow if client is destroyed. Note that regular
+		 * clients are the only type of client allows to register for a
+		 * swallow. Thus we don't need to check the other cases. */
+		if (swallows) {
+			for (s = swallows; s; s = s->next) {
+				if (c == s->client) {
+					removeswallow(s);
+					break; /* max. 1 queued swallow per client */
+				}
+			}
+		}
 		break;
 	case 2: /* swallowee */
 		unmanageswallow(c, 1);
@@ -2455,8 +2467,20 @@ unmapnotify(XEvent *e) {
 
 	Client *c;
 	XUnmapEvent *ev = &e->xunmap;
+	Swallow *s;
 
 	if ((c = wintoclient(ev->window))) {
+
+		/* Remove queued swallow if client is unmapped */
+		if (swallows) {
+			for (s = swallows; s; s = s->next) {
+				if (c == s->client) {
+					removeswallow(s);
+					break; /* max. 1 queued swallow per client */
+				}
+			}
+		}
+
 		if (ev->send_event) {
 			/* ICCCM 4.1.4:  When changing the state of the window to
 			 * Withdrawn, the client must (in addition to unmapping the window)
