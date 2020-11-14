@@ -113,7 +113,8 @@ typedef struct {
 
 typedef struct Swallow Swallow;
 struct Swallow {
-	char filter[256]; /* WM_CLASS */
+	char classname[256]; /* WM_CLASS */
+	char instname[256]; /* WM_NAME or _NET_WM_NAME */
 	Client *client; /* swallower */
 	Swallow *next;
 };
@@ -168,7 +169,7 @@ static void moveclient(const Arg *arg);
 static Client *nexttiled(Client *c);
 static void pop(Client *);
 static void propertynotify(XEvent *e);
-static void makeswallow(Client *c, const char* filter);
+static void makeswallow(Client *c, const char* filterclass, const char* filtername);
 static void quit(const Arg *arg);
 static Monitor *recttomon(int x, int y, int w, int h);
 static void removeswallow(Swallow *s);
@@ -967,10 +968,13 @@ fakesignal(void)
 
 	/* Parse args and dispatch commands */
 	if (*p == ':' && !strcmp(buf, "makeswallow")) {
+		char buf[256];
 		Window winclient;
 		Client *c, *o;
 
 		/* retrieve window ($1) */
+		// TODO: Macros for clean parsing of args
+		// TODO: CLI to guarantee safe arguments
 		winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
 		if (*q != ':' || p+1 == q)
 			return 1;
@@ -983,9 +987,13 @@ fakesignal(void)
 		default:
 			return 1;
 		}
+		p = q + 1;
+		q = strchr(p, ':');
+		strncpy(buf, p, q - p);
+		buf[q-p] = '\0';
 
 		/* retrieve filter ($2) */
-		makeswallow(c, q+1);
+		makeswallow(c, buf, q+1);
 	} else if (*p == ':' && !strcmp(buf, "wininfo")) {
 		Window winclient;
 		Client *cc;
@@ -1692,7 +1700,7 @@ propertynotify(XEvent *e)
 }
 
 void // move to alphabetical position
-makeswallow(Client *c, const char *filter)
+makeswallow(Client *c, const char *filterclass, const char *filtername)
 {
 	/* c must refer to a mapped, non-swallowed window */
 
@@ -1700,14 +1708,18 @@ makeswallow(Client *c, const char *filter)
 
 	/* Ensure c and filter are unique */
 	for (s = swallows; s; s = s->next) {
-		if (s->client == c || !strcmp(s->filter, filter)) {
+		if (s->client == c || !strcmp(s->classname, filterclass)
+			|| !strcmp(s->instname, filtername)) {
 			return;
 		}
 	}
 
 	s = ecalloc(1, sizeof(Swallow));
 	s->client = c;
-	strncpy(s->filter, filter, sizeof(s->filter));
+	if (filterclass)
+		strncpy(s->classname, filterclass, sizeof(s->classname));
+	if (filtername)
+		strncpy(s->classname, filtername, sizeof(s->classname));
 	s->next = swallows;
 	swallows = s;
 }
@@ -2798,13 +2810,27 @@ Swallow *
 wintoswallow(Window w)
 {
 	XClassHint ch = { NULL, NULL };
-	Swallow *s;
+	Swallow *s = NULL;
 
 	XGetClassHint(dpy, w, &ch);
 
-	for (s = swallows; s; s = s->next) {
-		if (strstr(ch.res_name, s->filter))
-			break;
+	if (ch.res_class && ch.res_name) {
+		for (s = swallows; s; s = s->next) {
+			if (strstr(ch.res_class, s->classname) && strstr(ch.res_name, s->instname))
+				break;
+		}
+	}
+	else if (ch.res_class && !ch.res_name) {
+		for (s = swallows; s; s = s->next) {
+			if (strstr(ch.res_class, s->classname))
+				break;
+		}
+	}
+	else if (!ch.res_class && ch.res_name) {
+		for (s = swallows; s; s = s->next) {
+			if (strstr(ch.res_name, s->instname))
+				break;
+		}
 	}
 
 	if (ch.res_class)
@@ -2970,3 +2996,8 @@ main(int argc, char *argv[])
 //		2) increase xephyr's window size and create a few clients
 //		3) clients cannot be focused by mouse click into the newly exposed area
 //		   or the wrong client gets focused
+//
+
+// TODO(feat): Swallow task list
+//   - Proper IPC with dwm
+//   - Tidy filter mechanism (name, class)
