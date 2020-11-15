@@ -2,12 +2,12 @@
 
 /* appearance */
 static const unsigned int statusrpad = 12; /* padding right of status */
-static const unsigned int borderpx = 2;        /* border pixel of windows */
-static const unsigned int gappx    = 15;       /* gaps between windows */
+static const unsigned int borderpx = 1;        /* border pixel of windows */
+static const unsigned int gappx    = 10;       /* gaps between windows */
 static const unsigned int snap     = 32;       /* snap pixel */
 static const int showbar           = 1;        /* 0 means no bar */
 static const int topbar            = 1;        /* 0 means bottom bar */
-static const char *fonts[]         = { "LM Roman:size=10" };
+static const char *fonts[]         = { "Roboto:size=10", "DejaVu Sans Mono Nerd Font:size=10" };
 static const char col_gray1[]      = "#222222";
 static const char col_gray2[]      = "#444444";
 static const char col_gray3[]      = "#bbbbbb";
@@ -18,8 +18,8 @@ static const unsigned int baralpha = 0xd0;
 static const unsigned int borderalpha = OPAQUE;
 static const char *colors[][3]     = {
 	/*               fg         bg         border   */
-	[SchemeNorm] = {  "#FFFFFF",  "#000000", "#000000" },
-	[SchemeSel]  = { "#000000", "#FFFFFF",  "#FFFFFF"  },
+	[SchemeNorm] = {  "#FFFFFF",  "#222222", "#000000" },
+	[SchemeSel]  = { "#222222", "#FFFFFF",  "#FFFFFF"  },
 	//[SchemeNorm] = { col_gray3, col_gray1, col_gray2 },
 //	[SchemeNorm] = {  "#FFFFFF",  "#000000", col_gray2 },
 //	// [SchemeSel]  = { col_gray4, col_cyan,  "#ff4769"  },
@@ -61,9 +61,9 @@ static const int resizehints = 0;    /* 1 means respect size hints in tiled resi
 
 static const Layout layouts[] = {
 	/* symbol     arrange function */
-	{ "[]=",      tile },    /* first entry is default */
-	{ "><>",      NULL },    /* no layout function means floating behavior */
-	{ "[M]",      monocle },
+	{ "﩯",      tile },    /* first entry is default */
+	{ "",      NULL },    /* no layout function means floating behavior */
+	{ "𧻓",      monocle },
 };
 
 /* key definitions */
