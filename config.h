@@ -18,8 +18,12 @@ static const unsigned int baralpha = 0xd0;
 static const unsigned int borderalpha = OPAQUE;
 static const char *colors[][3]     = {
 	/*               fg         bg         border   */
-	[SchemeNorm] = { col_gray3, col_gray1, col_gray2 },
-	[SchemeSel]  = { col_gray4, col_cyan,  "#ff4769"  },
+[SchemeNorm] = {  "#FFFFFF",  "#000000", "#000000" },
+	[SchemeSel]  = { "#000000", "#FFFFFF",  "#FFFFFF"  },
+	//[SchemeNorm] = { col_gray3, col_gray1, col_gray2 },
+//	[SchemeNorm] = {  "#FFFFFF",  "#000000", col_gray2 },
+//	// [SchemeSel]  = { col_gray4, col_cyan,  "#ff4769"  },
+//	[SchemeSel]  = { "#000000", "#FFFFFF",  "#ff4769"  },
 };
 static const unsigned int alphas[][3] = {
   [SchemeNorm] = { OPAQUE, baralpha, borderalpha },

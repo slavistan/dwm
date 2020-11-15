@@ -45,7 +45,7 @@
 
 /* enums */
 enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor */
-enum { SchemeNorm, SchemeSel }; /* color schemes */
+enum { SchemeNorm, SchemeSel, SchemeStatus }; /* color schemes */
 enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
        NetWMFullscreen, NetActiveWindow, NetWMWindowType,
        NetWMWindowTypeDialog, NetClientList, NetLast }; /* EWMH atoms */
@@ -870,7 +870,7 @@ drawbar(Monitor *m)
 
 	/* draw status first so it can be overdrawn by tags later */
 	if (m == selmon) { /* status is only drawn on selected monitor */
-		drw_setscheme(drw, scheme[SchemeNorm]);
+		drw_setscheme(drw, scheme[SchemeSel]);
 		sw = TEXTW(stext) - lrpad/2 + statusrpad;
 		drw_text(drw, m->ww - sw, 0, sw, bh, lrpad/2, stext, 0);
 	}
@@ -3020,8 +3020,11 @@ main(int argc, char *argv[])
 //		2) increase xephyr's window size and create a few clients
 //		3) clients cannot be focused by mouse click into the newly exposed area
 //		   or the wrong client gets focused
-//
 
-// TODO(feat): Swallow task list
-//   - Proper IPC with dwm
-//   - Tidy filter mechanism (name, class)
+// TODO(feat): dwmctl client for IPC
+// TODO(feat): Remove swallows when client changes to unsuitable state.
+//		While unmap or destroy notifications remove resulting stale
+//		swallows, there's no mechanism to recognize whenever a client
+//		chooses to go "crazy" and drastically changes its configuration,
+//		becoming unsuitable as a swallower. Crazy ought to be clearly
+//		define first.
