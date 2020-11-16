@@ -2104,7 +2104,7 @@ setup(void)
 	if (!drw_fontset_create(drw, fonts, LENGTH(fonts)))
 		die("no fonts could be loaded.");
 	lrpad = drw->fonts->h;
-	bh = drw->fonts->h * (1 + 2 * barpadrely);
+	bh = barpady <= 1 ? drw->fonts->h * (1 + 2 * barpady) : drw->fonts->h + barpady;
 	updategeom();
 
 	/* Initialize atoms from property names */
