@@ -1002,7 +1002,7 @@ fakesignal(void)
 	/* Get root name, find the prefix  */
 	if (!gettextprop(root, XA_WM_NAME, rootname, sizeof(rootname))
 		|| strncmp(prefix, rootname, sizeof(prefix) - 1)) {
-		return 1;
+		return 0;
 	}
 
 	p = rootname + sizeof(prefix) - 1;
@@ -3032,3 +3032,7 @@ main(int argc, char *argv[])
 // TODO(fix): Make -> CMake
 
 // TODO(fix): man pages
+
+// TODO(fix): drawbar(): Unchecked space left of status string. Click == Click on root.
+
+// TODO(feat): Remove window snapping to boundaries

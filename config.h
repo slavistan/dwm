@@ -7,7 +7,7 @@ static const unsigned int gappx    = 10;       /* gaps between windows */
 static const unsigned int snap     = 32;       /* snap pixel */
 static const int showbar           = 1;        /* 0 means no bar */
 static const int topbar            = 1;        /* 0 means bottom bar */
-static const char *fonts[]         = { "Roboto:size=10", "DejaVu Sans Mono Nerd Font:size=10" };
+static const char *fonts[]         = { "Roboto:size=14", "DejaVu Sans Mono Nerd Font:size=14" };
 static const char col_gray1[]      = "#222222";
 static const char col_gray2[]      = "#444444";
 static const char col_gray3[]      = "#bbbbbb";
@@ -15,7 +15,7 @@ static const char col_gray4[]      = "#eeeeee";
 static const char col_red[]        = "#f90f47";
 static const char col_white[]      = "#ffffff";
 static const float barpady         = 12; /* y-padding of bar; if ≤ 1, padding is rel. to font height, otherwise absolute in pixels */
-static const unsigned int baralpha = 0xd0;
+static const unsigned int baralpha = OPAQUE;
 static const unsigned int borderalpha = OPAQUE;
 static const char *colors[][3]     = {
 	/*               fg       , bg       , border */
