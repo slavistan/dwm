@@ -60,6 +60,24 @@ _launch_xephyr() {
 	DISPLAY=:0 Xephyr -br -ac -reset -resizeable :4 &
 }
 
+_launch_setup() {
+	xrandr --listmonitors 2>/dev/null | tail -n +2 |
+		cut -d ' ' -f 3 | grep -v '^+' | while read line; do
+		xrandr --delmonitor "$line" 2>/dev/null
+	done
+
+	geom=$(xrandr 2>/dev/null | head -2 | tail -n +2 | cut -d ' ' -f 3 |
+		tr 'x+' ' ')
+	w=$(echo "$geom" | cut -d ' ' -f 1)
+	h=$(echo "$geom" | cut -d ' ' -f 2)
+	w1=$((w / 2))
+	w2=$((w - w1))
+
+	xrandr --setmonitor default-1 $w1/0x$h/0+0+0 default >/dev/null 2>&1
+	xrandr --setmonitor default-2 $w2/0x$h/0+$w1+0 none >/dev/null 2>&1
+	feh --bg-scale ~/dat/img/wall
+}
+
 _ls() {
 	export DISPLAY=:4
 	xdotool search --maxdepth 1 --name ".*" | while read w; do
