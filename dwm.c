@@ -986,88 +986,54 @@ expose(XEvent *e)
 int
 fakesignal(void)
 {
-	char buf[32];
-	#define indicator ":"
-	char rootname[sizeof(indicator) + 256];
-	ssize_t n;
+	/* Unsafe; Input is not checked for correct syntax */
+
+	/* Syntax: <PREFIX><COMMAND>[<ARGSEP><ARG>]... */
+	static const char prefix[] = "#!";
+	static const char argsep[] = "'+_+'";
+	static const char *cmds[] = { "swallow" };
+
+	char rootname[256];
 	char *p, *q;
+	char *argoffset[16];
+	Window w;
+	Client *c;
 
-	/* Get root name, find the indicator  */
-	if (!gettextprop(root, XA_WM_NAME, rootname, sizeof(rootname)) ||
-		strncmp(indicator ":", rootname, sizeof(indicator))) {
+	/* Get root name, find the prefix  */
+	if (!gettextprop(root, XA_WM_NAME, rootname, sizeof(rootname))
+		|| strncmp(prefix, rootname, sizeof(prefix) - 1)) {
 		return 1;
 	}
 
-	/*
-	 * Syntax:
-	 *  1. INDICATOR:COMMAND
-	 *  2. INDICATOR:COMMAND:VAL1:VAL2:...:VALN
-	 */
+	p = rootname + sizeof(prefix) - 1;
+	if (!strncmp(p, cmds[0], sizeof(cmds[0]) - 1)) {
+		p += sizeof(cmds[0]) + sizeof(argsep) - 2;
+		argoffset[0] = p; /* window */
+		q = strstr(p, argsep);
+		*q = '\0';
+		p = q + sizeof(argsep) - 1;
+		argoffset[1] = p; /* class name */
+		q = strstr(p, argsep);
+		*q = '\0';
+		p = q + sizeof(argsep) - 1;
+		argoffset[2] = p; /* instance name */
 
-	/* Retrieve colon-sep'd command string */
-	if ((p = strchr(rootname + sizeof(indicator), ':')) == NULL)
-		p = rootname + strlen(rootname); // syntax 1
-	n = p - (rootname + sizeof(indicator));
-	if (sizeof(buf)-1 < n)
-		return 1;
-	memcpy(buf, rootname + sizeof(indicator), n);
-	buf[n] = '\0';
+		w = strtoul(argoffset[0], NULL, 0);
+		if (!strlen(argoffset[1]))
+			argoffset[1] = NULL;
+		if (!strlen(argoffset[2]))
+			argoffset[2] = NULL;
 
-	/* Parse args and dispatch commands */
-	if (*p == ':' && !strcmp(buf, "makeswallow")) {
-		char buf[256];
-		Window winclient;
-		Client *c, *o;
-
-		/* retrieve window ($1) */
-		// TODO: Macros for clean parsing of args
-		// TODO: CLI to guarantee safe arguments
-		winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
-		if (*q != ':' || p+1 == q)
-			return 1;
-
-		switch (wintoclient2(winclient, &c)) {
+		switch (wintoclient2(w, &c)) {
 		case 1:
+			makeswallow(c, argoffset[1], argoffset[2]);
 			break;
-		case 2:
-		case 3:
 		default:
-			return 1;
+			break;
 		}
-		p = q + 1;
-		q = strchr(p, ':');
-		strncpy(buf, p, q - p);
-		buf[q-p] = '\0';
-
-		/* retrieve filter ($2) */
-		makeswallow(c, buf, q+1);
-	} else if (*p == ':' && !strcmp(buf, "wininfo")) {
-		Window winclient;
-		Client *cc;
-
-		winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
-		if (*q != '\0')
-			return 1;
-
-		if ((cc = wintoclient(winclient)) == NULL)
-			return 1;
-	}
-	 else if (*p == ':' && !strcmp(buf, "resizeclient")) {
-		Window winclient;
-		Client *cc;
-
-		winclient = strtoul(p+1, &q, 0); // TODO: is ulong always large enough for Window?
-		if (*q != '\0')
-			return 1;
-
-		if ((cc = wintoclient(winclient)) == NULL)
-			return 1;
-
-		resizeclient(cc, 20, 100, 300, 300);
 	}
 
-	/* No fake signal was sent, so proceed with update */
-	return 0;
+	return 1;
 }
 
 void
@@ -1329,7 +1295,7 @@ killclient(const Arg *arg)
  * removeswallow().
  */
 void
-makeswallow(Client *c, const char *filterclass, const char *filtername)
+makeswallow(Client *c, const char *class, const char *inst)
 {
 	/* Caller must ensure that 'c' is valid swallower, i.e. is mapped and not
 	 * involved in a swallow. */
@@ -1337,19 +1303,20 @@ makeswallow(Client *c, const char *filterclass, const char *filtername)
 	Swallow *s;
 
 	/* Ensure c and filter are unique */
+	// TODO: Update swallow for existing client rather than ignore it
 	for (s = swallows; s; s = s->next) {
-		if (s->client == c || !strcmp(s->classname, filterclass)
-			|| !strcmp(s->instname, filtername)) {
+		if (s->client == c || !strcmp(s->classname, class)
+			|| !strcmp(s->instname, inst)) {
 			return;
 		}
 	}
 
 	s = ecalloc(1, sizeof(Swallow));
 	s->client = c;
-	if (filterclass)
-		strncpy(s->classname, filterclass, sizeof(s->classname));
-	if (filtername)
-		strncpy(s->classname, filtername, sizeof(s->classname));
+	if (class)
+		strncpy(s->classname, class, sizeof(s->classname));
+	if (inst)
+		strncpy(s->instname, inst, sizeof(s->instname));
 	s->next = swallows;
 	swallows = s;
 }
@@ -1520,7 +1487,7 @@ mappingnotify(XEvent *e)
 void
 maprequest(XEvent *e)
 {
-	Client *c, **pc;
+	Client *c;
 	static XWindowAttributes wa;
 	XMapRequestEvent *ev = &e->xmaprequest;
 	Swallow *s;
@@ -3061,3 +3028,7 @@ main(int argc, char *argv[])
 // TODO(feat): Cycle layouts keybind and on click onto symbol
 
 // TODO(fix): Add gaps to monocle
+
+// TODO(fix): Make -> CMake
+
+// TODO(fix): man pages

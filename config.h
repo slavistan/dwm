@@ -13,21 +13,14 @@ static const char col_gray2[]      = "#444444";
 static const char col_gray3[]      = "#bbbbbb";
 static const char col_gray4[]      = "#eeeeee";
 static const char col_red[]        = "#f90f47";
+static const char col_white[]      = "#ffffff";
 static const float barpady         = 12; /* y-padding of bar; if ≤ 1, padding is rel. to font height, otherwise absolute in pixels */
 static const unsigned int baralpha = 0xd0;
 static const unsigned int borderalpha = OPAQUE;
 static const char *colors[][3]     = {
-	/*               fg         bg         border   */
-	[SchemeNorm] = {  "#FFFFFF", col_gray1, col_gray1},
-	[SchemeSel]  = { col_gray4, col_red,  col_red  },
-	//[SchemeNorm] = { col_gray3, col_gray1, col_gray2 },
-//	[SchemeNorm] = {  "#FFFFFF",  "#000000", col_gray2 },
-//	// [SchemeSel]  = { col_gray4, col_cyan,  "#ff4769"  },
-//	[SchemeSel]  = { "#000000", "#FFFFFF",  "#ff4769"  },
-	//[SchemeNorm] = { col_gray3, col_gray1, col_gray2 },
-//	[SchemeNorm] = {  "#FFFFFF",  "#000000", col_gray2 },
-//	// [SchemeSel]  = { col_gray4, col_cyan,  "#ff4769"  },
-//	[SchemeSel]  = { "#000000", "#FFFFFF",  "#ff4769"  },
+	/*               fg       , bg       , border */
+	[SchemeNorm] = { col_white, col_gray1, col_gray1 },
+	[SchemeSel]  = { col_gray4, col_red  , col_red   },
 };
 static const unsigned int alphas[][3] = {
   [SchemeNorm] = { OPAQUE, baralpha, borderalpha },
@@ -52,7 +45,6 @@ static const Rule rules[] = {
 	{ "Microsoft Teams", NULL        , NULL , (1 << 7) , 0         , -1 },
 	{ "Firefox"        , NULL        , NULL , (1 << 1) , 0         , -1 },
 };
-
 
 /* layout(s) */
 static const float mfact     = 0.55; /* factor of master area size [0.05..0.95] */
