@@ -272,7 +272,6 @@ static int depth;
 static Colormap cmap;
 
 char logfilepath[128];
-static Client *swallownext;
 
 /* configuration, allows nested code to access above variables */
 #include "config.h"
@@ -1431,7 +1430,6 @@ manageswallow(Client *s, Window w)
 	 * As we've copied the configuration of an existing window, arrange() won't
 	 * do anything here. Thus we call XMoveResize() explicitly and omit
 	 * arrange(). */
-	// arrange(c->mon); // Remove eventually if not needed
 	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
 
 	XMapWindow(dpy, c->win);
@@ -2716,17 +2714,20 @@ updatestatus(void)
 	drawbar(selmon);
 }
 
-/*
- * Copy XA_WM_NAME into c->name
- */
 void
 updatetitle(Client *c)
 {
-	// TODO: Prefix with WM_CLASS
-	if (!gettextprop(c->win, netatom[NetWMName], c->name, sizeof c->name))
-		gettextprop(c->win, XA_WM_NAME, c->name, sizeof c->name);
-	if (c->name[0] == '\0') /* hack to mark broken clients */
-		strcpy(c->name, broken);
+	XClassHint ch = { NULL, NULL };
+
+	if (!XGetClassHint(dpy, c->win, &ch))
+		return;
+
+	strncpy(c->name, ch.res_class, sizeof(c->name));
+
+	if (ch.res_class)
+		XFree(ch.res_class);
+	if (ch.res_name)
+		XFree(ch.res_name);
 }
 
 void
