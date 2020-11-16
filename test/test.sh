@@ -68,7 +68,6 @@ _ls() {
 	done
 }
 
-
 export DISPLAY=:4
 case "$1" in
 test)
