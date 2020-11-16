@@ -20,7 +20,27 @@
  *
  * To understand everything else, start reading main().
  */
-#include "dwm.h"
+#include <errno.h>
+#include <locale.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <X11/cursorfont.h>
+#include <X11/keysym.h>
+#include <X11/Xatom.h>
+#include <X11/Xlib.h>
+#include <X11/Xproto.h>
+#include <X11/Xutil.h>
+#ifdef XINERAMA
+#include <X11/extensions/Xinerama.h>
+#endif /* XINERAMA */
+#include <X11/Xft/Xft.h>
+
 #include "drw.h"
 #include "util.h"
 
@@ -67,6 +87,25 @@ typedef struct {
 	void (*func)(const Arg *arg);
 	const Arg arg;
 } Button;
+
+typedef struct Monitor Monitor;
+typedef struct Client Client;
+struct Client {
+	char name[256]; /* window title */
+	float mina, maxa; /* size aspects info */
+	float cfact;
+	int x, y, w, h; /* win geometry in pixels */
+	int oldx, oldy, oldw, oldh; /* win geometry buffer (e.g. for fullscreen toggle) */
+	int basew, baseh, incw, inch, maxw, maxh, minw, minh; /* size hints */
+	int bw, oldbw; /* border width */
+	unsigned int tags; /* tag set (bit flags) */
+	int isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen;
+	Client *next; /* next client in list */
+	Client *snext; /* next client in focus stack */
+	Client *swallowedby; /* client hidden behind me */
+	Monitor *mon; /* monitor for this client */
+	Window win; /* window id */
+};
 
 typedef struct {
 	unsigned int mod;
@@ -158,6 +197,7 @@ static void grabkeys(void);
 static void incnmaster(const Arg *arg);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
+static void makeswallow(Client *c, const char* filterclass, const char* filtername);
 static void manage(Window w, XWindowAttributes *wa);
 static void manageswallow(Client *c, Window w);
 static void mappingnotify(XEvent *e);
@@ -169,7 +209,6 @@ static void moveclient(const Arg *arg);
 static Client *nexttiled(Client *c);
 static void pop(Client *);
 static void propertynotify(XEvent *e);
-static void makeswallow(Client *c, const char* filterclass, const char* filtername);
 static void quit(const Arg *arg);
 static Monitor *recttomon(int x, int y, int w, int h);
 static void removeswallow(Swallow *s);
@@ -270,8 +309,6 @@ static int useargb = 0;
 static Visual *visual;
 static int depth;
 static Colormap cmap;
-
-char logfilepath[128];
 
 /* configuration, allows nested code to access above variables */
 #include "config.h"
@@ -961,11 +998,11 @@ fakesignal(void)
 		return 1;
 	}
 
-    /*
-     * Syntax:
-     *  1. INDICATOR:COMMAND
-     *  2. INDICATOR:COMMAND:VAL1:VAL2:...:VALN
-     */
+	/*
+	 * Syntax:
+	 *  1. INDICATOR:COMMAND
+	 *  2. INDICATOR:COMMAND:VAL1:VAL2:...:VALN
+	 */
 
 	/* Retrieve colon-sep'd command string */
 	if ((p = strchr(rootname + sizeof(indicator), ':')) == NULL)
@@ -1014,9 +1051,8 @@ fakesignal(void)
 
 		if ((cc = wintoclient(winclient)) == NULL)
 			return 1;
-
-		logclient(cc, 1);
-	} else if (*p == ':' && !strcmp(buf, "resizeclient")) {
+	}
+	 else if (*p == ':' && !strcmp(buf, "resizeclient")) {
 		Window winclient;
 		Client *cc;
 
@@ -1286,6 +1322,36 @@ killclient(const Arg *arg)
 		XSetErrorHandler(xerror);
 		XUngrabServer(dpy);
 	}
+}
+
+/*
+ * Create a swallow and add it to the list of swallows. Complement to
+ * removeswallow().
+ */
+void
+makeswallow(Client *c, const char *filterclass, const char *filtername)
+{
+	/* Caller must ensure that 'c' is valid swallower, i.e. is mapped and not
+	 * involved in a swallow. */
+
+	Swallow *s;
+
+	/* Ensure c and filter are unique */
+	for (s = swallows; s; s = s->next) {
+		if (s->client == c || !strcmp(s->classname, filterclass)
+			|| !strcmp(s->instname, filtername)) {
+			return;
+		}
+	}
+
+	s = ecalloc(1, sizeof(Swallow));
+	s->client = c;
+	if (filterclass)
+		strncpy(s->classname, filterclass, sizeof(s->classname));
+	if (filtername)
+		strncpy(s->classname, filtername, sizeof(s->classname));
+	s->next = swallows;
+	swallows = s;
 }
 
 void
@@ -1697,31 +1763,6 @@ propertynotify(XEvent *e)
 		if (ev->atom == netatom[NetWMWindowType])
 			updatewindowtype(c);
 	}
-}
-
-void // move to alphabetical position
-makeswallow(Client *c, const char *filterclass, const char *filtername)
-{
-	/* c must refer to a mapped, non-swallowed window */
-
-	Swallow *s;
-
-	/* Ensure c and filter are unique */
-	for (s = swallows; s; s = s->next) {
-		if (s->client == c || !strcmp(s->classname, filterclass)
-			|| !strcmp(s->instname, filtername)) {
-			return;
-		}
-	}
-
-	s = ecalloc(1, sizeof(Swallow));
-	s->client = c;
-	if (filterclass)
-		strncpy(s->classname, filterclass, sizeof(s->classname));
-	if (filtername)
-		strncpy(s->classname, filtername, sizeof(s->classname));
-	s->next = swallows;
-	swallows = s;
 }
 
 void
@@ -2963,13 +3004,6 @@ zoom(const Arg *arg)
 int
 main(int argc, char *argv[])
 {
-	// TODO: Clean up logging. Mb remove all the crap.
-	char *p;
-	if ((p = getenv("DISPLAY")) != NULL && strlen(p) >= 2 && p[0] == ':')
-		sprintf(logfilepath, LOGFILE_TEMPLATE, p+1);
-	else
-		sprintf(logfilepath, LOGFILE_TEMPLATE, "unknown-display");
-
 	if (argc == 2 && !strcmp("-v", argv[1]))
 		die("dwm-"VERSION);
 	else if (argc != 1)
@@ -2996,26 +3030,34 @@ main(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
-// TODO(bug): Spurious tag changing from windows on another monitor
-//   An urgent window on another monitor causes a change in displayed tags
-//   on the currently active monitor.
-//   How to reproduce:
-//     1) Set a default monitor for an application (e.g. firefox)
-//     2) On one monitor launch the application with a delay 'sleep 5; firefox google.com'
-//     3) Switch to the other monitor and show any tag not associated with the application
-//     => After sleep returns the dwm will switch tags on _both_ monitors.
+// TODO(bug): Spurious tag change from urgent windows on different monitor
+//            An urgent window on another monitor causes a change in displayed
+//            tags on the currently active monitor.
+//            How to reproduce:
+//              1) Set a default monitor for an application (e.g. firefox)
+//              2) On one monitor launch the application with a delay 'sleep 5;
+//                 firefox google.com'
+//              3) Switch to the other monitor and show any tag not associated
+//                 with the application
+//              => After sleep returns the dwm will switch tags on _both_
+//                 monitors.
 
 // TODO(bug): Resizing xephyr window seems to not propagate to dwm
-//	Steps to reproduce:
-//		1) Create a xephyr window and run dwm
-//		2) increase xephyr's window size and create a few clients
-//		3) clients cannot be focused by mouse click into the newly exposed area
-//		   or the wrong client gets focused
+//            Steps to reproduce:
+//              1) Create a xephyr window and run dwm
+//              2) increase xephyr's window size and create a few clients
+//              3) clients cannot be focused by mouse click into the newly
+//                 exposed area or the wrong client gets focused
 
 // TODO(feat): dwmctl client for IPC
+
 // TODO(feat): Remove swallows when client changes to unsuitable state.
-//		While unmap or destroy notifications remove resulting stale
-//		swallows, there's no mechanism to recognize whenever a client
-//		chooses to go "crazy" and drastically changes its configuration,
-//		becoming unsuitable as a swallower. Crazy ought to be clearly
-//		define first.
+//             While unmap or destroy notifications remove resulting stale
+//             swallows, there's no mechanism to recognize whenever a client
+//             chooses to go "crazy" and drastically changes its configuration,
+//             becoming unsuitable as a swallower. Crazy ought to be clearly
+//             defined first.
+
+// TODO(feat): Cycle layouts keybind and on click onto symbol
+
+// TODO(fix): Add gaps to monocle
