@@ -3036,3 +3036,6 @@ main(int argc, char *argv[])
 // TODO(fix): drawbar(): Unchecked space left of status string. Click == Click on root.
 
 // TODO(feat): Remove window snapping to boundaries
+
+// TODO(fix): Ensure proper swallowing of windows which change their
+//            filter-relevant properties after config but before mapping
