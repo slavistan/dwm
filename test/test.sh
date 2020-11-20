@@ -60,7 +60,9 @@ _launch_xephyr() {
 	DISPLAY=:0 Xephyr -br -ac -reset -resizeable :4 &
 }
 
+# Setup virtual monitors inside Xephyr
 _launch_setup() {
+	# TODO(fix): Seems to work only while DWM is running
 	xrandr --listmonitors 2>/dev/null | tail -n +2 |
 		cut -d ' ' -f 3 | grep -v '^+' | while read line; do
 		xrandr --delmonitor "$line" 2>/dev/null
@@ -79,7 +81,6 @@ _launch_setup() {
 }
 
 _ls() {
-	export DISPLAY=:4
 	xdotool search --maxdepth 1 --name ".*" | while read w; do
 		name=$(xprop  -id $w | grep "WM_CLASS" | awk -F '= ' '{ print $2 }')
 		printf "$w\t'$name'\n"
@@ -95,8 +96,11 @@ test)
 	;;
 launch)
 	shift
-	[ ! $# -eq 1 ] && die "Usage: $0 launch WHAT"
-	_launch_$1
+	[ ! $# -ge 1 ] && die "Usage: $0 launch WHAT"
+	for var in "$@"; do
+		_launch_"$var"
+		sleep 0.5
+	done
 	;;
 kill)
 	shift
