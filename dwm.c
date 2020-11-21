@@ -3016,8 +3016,6 @@ main(int argc, char *argv[])
 //              3) clients cannot be focused by mouse click into the newly
 //                 exposed area or the wrong client gets focused
 
-// TODO(feat): dwmctl client for IPC
-
 // TODO(feat): Remove swallows when client changes to unsuitable state.
 //             While unmap or destroy notifications remove resulting stale
 //             swallows, there's no mechanism to recognize whenever a client
@@ -3035,7 +3033,6 @@ main(int argc, char *argv[])
 
 // TODO(fix): drawbar(): Unchecked space left of status string. Click == Click on root.
 
-// TODO(feat): Remove window snapping to boundaries
-
 // TODO(fix): Ensure proper swallowing of windows which change their
-//            filter-relevant properties after config but before mapping
+//            filter-relevant properties after config but before mapping.
+//			  Example: `zathura <file>` 
