@@ -912,6 +912,9 @@ drawbar(Monitor *m)
 		drw_setscheme(drw, scheme[SchemeNorm]);
 		sw = TEXTW(stext) - lrpad/2 + statusrpad;
 		drw_text(drw, m->ww - sw, 0, sw, bh, lrpad/2, stext, 0);
+	} else {
+		drw_setscheme(drw, scheme[SchemeNorm]);
+		drw_rect(drw, m->ww -sw, 0, sw, bh, 1, 1);
 	}
 
 	for (c = m->clients; c; c = c->next) {
@@ -934,12 +937,13 @@ drawbar(Monitor *m)
 	drw_setscheme(drw, scheme[SchemeNorm]);
 	x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
 
-	if ((w = m->ww - sw - x) > bh) {
+	if ((w = m->ww - sw - x) > bh) { // larger than bar height? the fuck?
 		if (m->sel) {
-			drw_setscheme(drw, scheme[m == selmon ? SchemeNorm : SchemeSel]);
+			drw_setscheme(drw, scheme[SchemeNorm]);
 			pad = MAX(lrpad / 2, ((m->ww - (int)TEXTW(m->sel->name))/2 - x));
 			drw_text(drw, x, 0, w, bh, pad, m->sel->name, 0);
-		} else {
+		}
+		else {
 			drw_setscheme(drw, scheme[SchemeNorm]);
 			drw_rect(drw, x, 0, w, bh, 1, 1);
 		}
@@ -3036,4 +3040,8 @@ main(int argc, char *argv[])
 
 // TODO(fix): Ensure proper swallowing of windows which change their
 //            filter-relevant properties after config but before mapping.
-//			  Example: `zathura <file>` 
+//			  Example: `zathura <file>`
+
+// NOTE: dwm behaves differently inside Xephyr when using virtual monitors.
+//		 check recttomon(). When drawing bars somehow every monitor thinks
+//		 it's the selected.
