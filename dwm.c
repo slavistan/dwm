@@ -548,6 +548,9 @@ void buttonpress(XEvent *e) {
 				click = ClkStatusText;
 				arg.ui = cindex;
 			}
+			else {
+				click = ClkWinTitle; /* close vanity gap left of status */
+			}
 		}
 		else {
 			click = ClkWinTitle;
@@ -3030,8 +3033,6 @@ main(int argc, char *argv[])
 // TODO(fix): Make -> CMake
 
 // TODO(fix): man pages
-
-// TODO(fix): drawbar(): Unchecked space left of status string. Click == Click on root.
 
 // TODO(fix): Ensure proper swallowing of windows which change their
 //            filter-relevant properties after config but before mapping.
