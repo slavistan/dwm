@@ -200,7 +200,7 @@ static void grabkeys(void);
 static void incnmaster(const Arg *arg);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
-static void makeswallow(Client *c, const char* class, const char* inst, const char* title);
+static void registerswallow(Client *c, const char* class, const char* inst, const char* title);
 static void manage(Window w, XWindowAttributes *wa);
 static void manageswallow(Client *c, Window w);
 static void mappingnotify(XEvent *e);
@@ -1027,7 +1027,7 @@ fakesignal(void)
 
 		switch (wintoclient2(w, &c)) {
 		case 1:
-			makeswallow(c, argoffset[1], argoffset[2], argoffset[3]);
+			registerswallow(c, argoffset[1], argoffset[2], argoffset[3]);
 			break;
 		default:
 			break;
@@ -1299,7 +1299,7 @@ killclient(const Arg *arg)
  * Complement to removeswallow().
  */
 void
-makeswallow(Client *c, const char *class, const char *inst, const char *title)
+registerswallow(Client *c, const char *class, const char *inst, const char *title)
 {
 	/* Caller must ensure that 'c' is valid swallower, i.e. is mapped and not
 	 * involved in a swallow. */
@@ -1773,11 +1773,13 @@ recttomon(int x, int y, int w, int h)
 }
 
 /*
- * Detach swallow and free resources. Complement to makeswallow().
+ * Detach swallow and free resources. Complement to registerswallow().
  */
 void
 removeswallow(Swallow *s)
 {
+	/* Unsafe: s mustn't be NULL */
+
 	Swallow **ps;
 
 	for (ps = &swallows; *ps && *ps != s; ps = &(*ps)->next);
