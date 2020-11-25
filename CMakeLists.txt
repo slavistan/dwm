@@ -12,23 +12,43 @@ find_package(X11 REQUIRED)
 find_package(Freetype REQUIRED)
 find_package(Fontconfig REQUIRED)
 
-include_directories(/usr/include/freetype2)
+###
+### dwm
+###
 
 add_executable(dwm dwm.c drw.c util.c)
-target_link_libraries(dwm X11 fontconfig Xft Xinerama Xrender)
+
+target_link_libraries(dwm
+    X11::X11
+    X11::Xinerama
+    X11::Xrender
+    X11::Xft
+    Fontconfig::Fontconfig
+    Freetype::Freetype)
+
 target_compile_definitions(dwm
     PRIVATE XINERAMA
     PRIVATE VERSION="${CMAKE_PROJECT_VERSION}")
+
 install(TARGETS dwm DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 
+###
+### dwmctl
+###
+
 add_executable(dwmctl util.c dwmctl.c)
-target_link_libraries(dwmctl X11)
+
+target_link_libraries(dwmctl
+    X11::X11)
+
 install(TARGETS dwmctl DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+
+###
+### CMake options
+###
 
 option(XSYNCHRONIZE "Use X synchronous mode (debugging)" OFF)
 if(XSYNCHRONIZE)
     target_compile_definitions(dwm PUBLIC XSYNCHRONIZE)
+    target_compile_definitions(dwmctl PUBLIC XSYNCHRONIZE)
 endif()
-
-# TODO(fix): Unfuck CMakeLists.txt
-#            - [ ] Freetype header must be included manually.
