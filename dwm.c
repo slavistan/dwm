@@ -986,48 +986,33 @@ fakesignal(void)
 {
 	/* Unsafe; Input is not checked for correct syntax */
 
-	/* Syntax: <PREFIX><COMMAND>[<ARGSEP><ARG>]... */
-	static const char prefix[] = "#!";
-	static const char argsep[] = "'+_+'";
-	static const char *cmds[] = { "swallow" };
+	/* Syntax: <SEP><COMMAND>[<SEP><ARG>]... */
+	static const char *prefix = "#!";
+	static const char *sep = "###";
 
-	char rootname[256];
-	char *p, *q;
-	char *argoffset[16];
 	Window w;
 	Client *c;
+	size_t numsegments, numargs;
+	char rootname[256];
+	char *segments[16] = {0};
 
-	/* Get root name, find the prefix  */
-	if (!gettextprop(root, XA_WM_NAME, rootname, sizeof(rootname))
-		|| strncmp(prefix, rootname, sizeof(prefix) - 1)) {
+	/* Get root name, split by separator and find the prefix */
+	if (!gettextprop(root, XA_WM_NAME, rootname, sizeof(rootname)) ||
+		(numsegments = split(rootname, sep, sizeof(segments), segments)) < 2 ||
+		strcmp(segments[0], prefix)) {
 		return 0;
 	}
 
-	p = rootname + sizeof(prefix) - 1;
-	if (!strncmp(p, cmds[0], sizeof(cmds[0]) - 1)) {
-		p += sizeof(cmds[0]) + sizeof(argsep) - 2;
-		argoffset[0] = p; /* window */
-		q = strstr(p, argsep);
-		*q = '\0';
-		p = q + sizeof(argsep) - 1;
-		argoffset[1] = p; /* class name */
-		q = strstr(p, argsep);
-		*q = '\0';
-		p = q + sizeof(argsep) - 1;
-		argoffset[2] = p; /* instance name */
-		// CONTINUEHERE: Parse window title
-
-		w = strtoul(argoffset[0], NULL, 0);
-		if (!strlen(argoffset[1]))
-			argoffset[1] = NULL;
-		if (!strlen(argoffset[2]))
-			argoffset[2] = NULL;
-		if (!strlen(argoffset[3]))
-			argoffset[3] = NULL;
-
+	numargs = numsegments - 2; /* number of parameters to the "command" */
+	if (!strcmp(segments[1], "swallow")) {
+		/* Params: windowid, class, instance, title */
+		if (numargs < 1) { /* need at least a window id */
+			return 1;
+		}
+		w = strtoul(segments[2], NULL, 0);
 		switch (wintoclient2(w, &c)) {
 		case 1:
-			registerswallow(c, argoffset[1], argoffset[2], argoffset[3]);
+			registerswallow(c, segments[3], segments[4], segments[5]);
 			break;
 		default:
 			break;
@@ -1302,7 +1287,7 @@ void
 registerswallow(Client *c, const char *class, const char *inst, const char *title)
 {
 	/* Caller must ensure that 'c' is valid swallower, i.e. is mapped and not
-	 * involved in a swallow. */
+	 * already involved in a swallow. */
 
 	Swallow *s;
 
@@ -3064,3 +3049,5 @@ main(int argc, char *argv[])
 // TODO: Check build with -Wall -pedantic
 
 // TODO: Implement swallow mechanism for existing clients.
+
+// TODO: valgrind memcheck
