@@ -8,28 +8,6 @@ errln() { echo "\033[31;1m[ERR ]\033[0m $@"; }
 logln() { echo "\033[32;1m[INFO]\033[0m $@"; }
 die() { echo "$@"; exit 1; }
 
-_test_swallow_tiling() {
-	zsh-xi st -n bingo <<"EOF" &
-wid=$(xdotool search --classname bingo)
-echo "I am window $wid"
-xsetroot -name ::swallownext:$wid
-EOF
-	xdotool search --classname bingo --sync
-	sleep 1
-	zathura &
-}
-
-_test_swallow_floating() {
-	zsh-xi st -n st-float-dingo <<"EOF" &
-wid=$(xdotool search --classname st-float-dingo)
-echo "I am window $wid"
-xsetroot -name ::swallownext:$wid
-EOF
-	xdotool search --classname st-float-dingo --sync
-	sleep 1
-	zathura &
-}
-
 _launch_dwm() {
 	killdwm
 	export DISPLAY=:4
