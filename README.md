@@ -16,3 +16,5 @@ Notable modifications include:
 
 TODO(fix): Changing active tags sometimes forgets focus history.
   - Wrong window is activated
+TODO: Include relevant portion of dwm's original README (e.g. license)
+TODO: Build instructions
