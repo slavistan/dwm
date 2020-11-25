@@ -1015,16 +1015,19 @@ fakesignal(void)
 		*q = '\0';
 		p = q + sizeof(argsep) - 1;
 		argoffset[2] = p; /* instance name */
+		// CONTINUEHERE: Parse window title
 
 		w = strtoul(argoffset[0], NULL, 0);
 		if (!strlen(argoffset[1]))
 			argoffset[1] = NULL;
 		if (!strlen(argoffset[2]))
 			argoffset[2] = NULL;
+		if (!strlen(argoffset[3]))
+			argoffset[3] = NULL;
 
 		switch (wintoclient2(w, &c)) {
 		case 1:
-			makeswallow(c, argoffset[1], argoffset[2]);
+			makeswallow(c, argoffset[1], argoffset[2], argoffset[3]);
 			break;
 		default:
 			break;
@@ -3048,14 +3051,14 @@ main(int argc, char *argv[])
 
 // TODO(fix): man pages
 
-// TODO(fix): Ensure proper swallowing of windows which change their
-//            filter-relevant properties after config but before mapping.
+// TODO: Ensure proper swallowing of windows which change their filter-relevant properties
+//	     after config but before mapping.
 //			  Example: `zathura <file>`
-
-// TODO: Add a swallow filter for name
 
 // NOTE: dwm behaves differently inside Xephyr when using virtual monitors.
 //		 check recttomon(). When drawing bars somehow every monitor thinks
 //		 it's the selected.
 
 // TODO: Check build with -Wall -pedantic
+
+// TODO: Implement swallow mechanism for existing clients.
