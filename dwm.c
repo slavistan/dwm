@@ -306,7 +306,7 @@ Display *dpy;
 static Drw *drw;
 static Monitor *mons, *selmon; /* monitor list, selected monitor */
 static Window root, wmcheckwin;
-static Swallow *swallows; /* se-queue of swallows */
+static Swallow *swallows; /* list of registered swallows */
 
 static int useargb = 0;
 static Visual *visual;
@@ -818,7 +818,7 @@ destroynotify(XEvent *e)
 	case 1: /* regular client */
 		unmanage(c, 1);
 		/* Remove queued swallow if client is destroyed. Note that regular
-		 * clients are the only type of client allows to register for a
+		 * clients are the only type of client allowed to register for a
 		 * swallow. Thus we don't need to check the other cases. */
 		if (swallows) {
 			for (s = swallows; s; s = s->next) {
