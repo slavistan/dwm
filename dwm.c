@@ -1018,6 +1018,7 @@ fakesignal(void)
 			break;
 		}
 	}
+	// CONTINUEHERE: Test swallowing in xephyr
 
 	return 1;
 }
