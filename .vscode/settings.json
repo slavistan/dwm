@@ -42,6 +42,7 @@
         "typeinfo": "c",
         "utility": "c",
         "vector": "c",
-        "system_error": "c"
+        "system_error": "c",
+        "*.inc": "c"
     }
 }

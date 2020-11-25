@@ -57,7 +57,9 @@ _kill_clients() {
 }
 
 _launch_xephyr() {
-	DISPLAY=:0 Xephyr -br -ac -reset -resizeable :4 &
+	DISPLAY=:0 Xephyr +xinerama +extension RANDR \
+		-screen 800x644 -screen 800x600 \
+		-ac -resizeable :4 &
 }
 
 # Setup virtual monitors inside Xephyr

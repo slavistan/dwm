@@ -58,3 +58,5 @@ main(int argc, char **argv)
 
 	return 0;
 }
+
+// TODO: dwmctl shall print the same version as dwm

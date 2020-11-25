@@ -152,8 +152,12 @@ typedef struct {
 
 typedef struct Swallow Swallow;
 struct Swallow {
-	char classname[256]; /* WM_CLASS */
-	char instname[256]; /* WM_NAME or _NET_WM_NAME */
+	/* Window class name, instance name (WM_CLASS) and title
+	 * (WM_NAME/_NET_WM_NAME, latter preferred if it exists). An empty string
+	 * implies a wildcard as per strstr(). */
+	char class[256];
+	char inst[256];
+	char title[256];
 	Client *client; /* swallower */
 	Swallow *next;
 };
@@ -166,7 +170,6 @@ static void arrangemon(Monitor *m);
 static void attach(Client *c);
 static void attachstack(Client *c);
 static void attachbottom(Client *c);
-static void attachbelow(Client *c);
 static void buttonpress(XEvent *e);
 static void checkotherwm(void);
 static void cleanup(void);
@@ -197,7 +200,7 @@ static void grabkeys(void);
 static void incnmaster(const Arg *arg);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
-static void makeswallow(Client *c, const char* filterclass, const char* filtername);
+static void makeswallow(Client *c, const char* class, const char* inst, const char* title);
 static void manage(Window w, XWindowAttributes *wa);
 static void manageswallow(Client *c, Window w);
 static void mappingnotify(XEvent *e);
@@ -427,7 +430,7 @@ applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 			*h = MIN(*h, c->maxh);
 	}
 
-  // Does the return value indicate whether a resize is necessary?
+	// Does the return value indicate whether a resize is necessary?
 	return *x != c->x || *y != c->y || *w != c->w || *h != c->h;
 }
 
@@ -488,18 +491,6 @@ attachbottom(Client *c)
 		below->next = c;
 	else
 		c->mon->clients = c;
-}
-
-void
-attachbelow(Client *c)
-{
-	/* If there is nothing on the monitor or the selected client is floating, attach normally */
-	if(!c->mon->sel || c->mon->sel == c || c->mon->sel->isfloating) {
-		attachbottom(c);
-		return;
-	}
-	c->next = c->mon->sel->next;
-	c->mon->sel->next = c;
 }
 
 void
@@ -908,13 +899,13 @@ drawbar(Monitor *m)
 	Client *c;
 
 	/* draw status first so it can be overdrawn by tags later */
+	drw_setscheme(drw, scheme[SchemeNorm]);
+	sw = TEXTW(stext) - lrpad/2 + statusrpad;
 	if (m == selmon) { /* status is only drawn on selected monitor */
-		drw_setscheme(drw, scheme[SchemeNorm]);
-		sw = TEXTW(stext) - lrpad/2 + statusrpad;
 		drw_text(drw, m->ww - sw, 0, sw, bh, lrpad/2, stext, 0);
 	} else {
 		drw_setscheme(drw, scheme[SchemeNorm]);
-		drw_rect(drw, m->ww -sw, 0, sw, bh, 1, 1);
+		drw_rect(drw, m->ww - sw, 0, sw, bh, 1, 1);
 	}
 
 	for (c = m->clients; c; c = c->next) {
@@ -1051,7 +1042,7 @@ focus(Client *c)
 	if (!c || !ISVISIBLE(c))
 		for (c = selmon->stack; c && !ISVISIBLE(c); c = c->snext);
 
-	/* Unfocus the possibly focused clients. */
+	/* Unfocus any possibly focused clients. */
 	if (selmon->sel && selmon->sel != c)
 		unfocus(selmon->sel, 0);
 
@@ -1298,22 +1289,36 @@ killclient(const Arg *arg)
 }
 
 /*
- * Create a swallow and add it to the list of swallows. Complement to
- * removeswallow().
+ * Create a swallow instance and attach it to the top of the list of swallows.
+ * 'class', 'inst' and 'title' shall point null-terminated strings or be NULL,
+ * implying a wildcard. If 'c' corresponds to an existing swallow, the
+ * swallow's filters are updated and no new swallow instance is created.
+ * Complement to removeswallow().
  */
 void
-makeswallow(Client *c, const char *class, const char *inst)
+makeswallow(Client *c, const char *class, const char *inst, const char *title)
 {
 	/* Caller must ensure that 'c' is valid swallower, i.e. is mapped and not
 	 * involved in a swallow. */
 
 	Swallow *s;
 
-	/* Ensure c and filter are unique */
-	// TODO: Update swallow for existing client rather than ignore it
+	/* Update swallow filters for existing, queued swallower */
 	for (s = swallows; s; s = s->next) {
-		if (s->client == c || !strcmp(s->classname, class)
-			|| !strcmp(s->instname, inst)) {
+		if (s->client == c) {
+			if (class)
+				strncpy(s->class, class, sizeof(s->class) - 1);
+			else
+				s->class[0] = '\0';
+			if (inst)
+				strncpy(s->inst, inst, sizeof(s->inst) - 1);
+			else
+				s->inst[0] = '\0';
+			if (title)
+				strncpy(s->title, title, sizeof(s->title) - 1);
+			else
+				s->title[0] = '\0';
+
 			return;
 		}
 	}
@@ -1321,9 +1326,13 @@ makeswallow(Client *c, const char *class, const char *inst)
 	s = ecalloc(1, sizeof(Swallow));
 	s->client = c;
 	if (class)
-		strncpy(s->classname, class, sizeof(s->classname));
+		strncpy(s->class, class, sizeof(s->class) - 1);
 	if (inst)
-		strncpy(s->instname, inst, sizeof(s->instname));
+		strncpy(s->inst, inst, sizeof(s->inst) - 1);
+	if (title)
+		strncpy(s->title, inst, sizeof(s->title) - 1);
+
+	/* Attach new swallow at top of the list */
 	s->next = swallows;
 	swallows = s;
 }
@@ -1408,7 +1417,7 @@ manage(Window w, XWindowAttributes *wa)
 void
 manageswallow(Client *s, Window w)
 {
-	// TODO: Which window attributes may be use without ruining the swallow feature? Border width?
+	// TODO: Which window attributes may be used without ruining the swallow feature? Border width?
 	Client *c, **pc;
 	XWindowChanges wc;
 
@@ -2734,11 +2743,13 @@ updatetitle(Client *c)
 {
 	XClassHint ch = { NULL, NULL };
 
-	if (!XGetClassHint(dpy, c->win, &ch))
+	if (!XGetClassHint(dpy, c->win, &ch) || !ch.res_class) {
+		strcpy(c->name, broken); /* mark broken clients */
 		return;
+	}
 
-	strncpy(c->name, ch.res_class, sizeof(c->name));
-
+	/* Display window class instead of lengthy name as window's title */
+	strncpy(c->name, ch.res_class, sizeof(c->name) - 1);
 	if (ch.res_class)
 		XFree(ch.res_class);
 	if (ch.res_name)
@@ -2836,31 +2847,30 @@ wintoclient2(Window w, Client **pc)
 	return 0; /* no match */
 }
 
+/*
+ * Return swallow instance which targets window 'w' as determined by its class
+ * name, instance name and window title. Returns NULL if none is found. Pendant
+ * to wintoclient.
+ */
 Swallow *
 wintoswallow(Window w)
 {
 	XClassHint ch = { NULL, NULL };
 	Swallow *s = NULL;
+	char title[sizeof(s->title)]; /* C Question: Determine a struct's member's static size */
 
+	/* Retrieve the window's class name, instance name and title. */
 	XGetClassHint(dpy, w, &ch);
+	if (!gettextprop(w, netatom[NetWMName], title, sizeof(title)))
+		gettextprop(w, XA_WM_NAME, title, sizeof(title));
 
-	if (ch.res_class && ch.res_name) {
-		for (s = swallows; s; s = s->next) {
-			if (strstr(ch.res_class, s->classname) && strstr(ch.res_name, s->instname))
-				break;
-		}
-	}
-	else if (ch.res_class && !ch.res_name) {
-		for (s = swallows; s; s = s->next) {
-			if (strstr(ch.res_class, s->classname))
-				break;
-		}
-	}
-	else if (!ch.res_class && ch.res_name) {
-		for (s = swallows; s; s = s->next) {
-			if (strstr(ch.res_name, s->instname))
-				break;
-		}
+	/* Search for matching swallow. Compare class, instance and title. Any
+	 * unset property implies a wildcard */
+	for (s = swallows; s; s = s->next) {
+		if ((!ch.res_class || !strcmp(s->class, ch.res_class)) &&
+			(!ch.res_name || !strcmp(s->inst, ch.res_name)) &&
+			(title[0] == '\0' || !strcmp(s->title, title)))
+			break;
 	}
 
 	if (ch.res_class)
@@ -3042,6 +3052,10 @@ main(int argc, char *argv[])
 //            filter-relevant properties after config but before mapping.
 //			  Example: `zathura <file>`
 
+// TODO: Add a swallow filter for name
+
 // NOTE: dwm behaves differently inside Xephyr when using virtual monitors.
 //		 check recttomon(). When drawing bars somehow every monitor thinks
 //		 it's the selected.
+
+// TODO: Check build with -Wall -pedantic
