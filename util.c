@@ -40,9 +40,13 @@ die(const char *fmt, ...) {
  * the end of every segment. The beginning of every segment is written to
  * 'pbegin'. Only the first 'maxcount' segments will be written if
  * maxcount > 0.
+ *
+ * Inspired by python's partition but allows for empty partitions.
+ * CONTINUEHERE: Fix partition() to output partitions before and after every
+ * separator.
  */
 size_t
-split(char *s, const char* sep, size_t maxcount, char **pbegin) {
+partition(char *s, const char* sep, char **pbegin, size_t maxcount) {
 
 	char *p, *q;
 	const size_t seplen = strlen(sep);

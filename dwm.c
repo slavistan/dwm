@@ -272,7 +272,7 @@ static void xinitvisual();
 static void zoom(const Arg *arg);
 
 /* variables */
-static const char broken[] = "broken"; /* name for broken (?!) clients */
+static const char broken[] = "broken"; /* name for broken client which do not set WM_CLASS*/
 static char stext[256];      /* status text */
 static int screen;
 static int sw, sh;           /* X display screen geometry width, height */
@@ -987,8 +987,7 @@ fakesignal(void)
 	/* Unsafe; Input is not checked for correct syntax */
 
 	/* Syntax: <SEP><COMMAND>[<SEP><ARG>]... */
-	static const char *prefix = "#!";
-	static const char *sep = "###";
+	static const char sep[] = "###";
 
 	Window w;
 	Client *c;
@@ -997,9 +996,9 @@ fakesignal(void)
 	char *segments[16] = {0};
 
 	/* Get root name, split by separator and find the prefix */
-	if (!gettextprop(root, XA_WM_NAME, rootname, sizeof(rootname)) ||
-		(numsegments = split(rootname, sep, sizeof(segments), segments)) < 2 ||
-		strcmp(segments[0], prefix)) {
+	if (!gettextprop(root, XA_WM_NAME, rootname, sizeof(rootname))
+		|| (numsegments = partition(rootname, sep, segments, sizeof(segments))) < 2
+		|| strncmp(segments[0], sep, sizeof(sep) - 1)) {
 		return 0;
 	}
 
@@ -1010,15 +1009,16 @@ fakesignal(void)
 			return 1;
 		}
 		w = strtoul(segments[2], NULL, 0);
+
+		/* Only regular clients, i.e. clients not involved in a swallow are
+		 * allowed to swallow. Nested swallowing will be implemented in the
+		 * future. */
 		switch (wintoclient2(w, &c)) {
-		case 1:
+		case 1: /* regular client */
 			registerswallow(c, segments[3], segments[4], segments[5]);
-			break;
-		default:
 			break;
 		}
 	}
-	// CONTINUEHERE: Test swallowing in xephyr
 
 	return 1;
 }
@@ -1287,10 +1287,17 @@ killclient(const Arg *arg)
 void
 registerswallow(Client *c, const char *class, const char *inst, const char *title)
 {
-	/* Caller must ensure that 'c' is valid swallower, i.e. is mapped and not
-	 * already involved in a swallow. */
+	/*
+	 * Unsafe; Caller must ensure that 'c'
+	 *  - is not swallowing
+	 *  - is not swallowed
+	 * Nested swallowing will be implemented in the future.
+	 */
 
 	Swallow *s;
+
+	if (!c)
+		return;
 
 	/* Update swallow filters for existing, queued swallower */
 	for (s = swallows; s; s = s->next) {
@@ -1520,7 +1527,7 @@ maprequest(XEvent *e)
 	case 2: /* swallowee; fallthrough */
 		return;
 	default:
-		break; /* when would this ever happen? */
+		break; /* No managed client */
 	}
 
 	/* No client manages the new window. See if any swallow matches. */
@@ -3052,3 +3059,10 @@ main(int argc, char *argv[])
 // TODO: Implement swallow mechanism for existing clients.
 
 // TODO: valgrind memcheck
+
+// TODO: Swallow features
+// 		  - delete (all) swallows from list
+//        - unswallow()
+//        - nested swallow
+//        - swallow (active) clients
+//

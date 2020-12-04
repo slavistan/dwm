@@ -36,7 +36,7 @@ _kill_clients() {
 
 _launch_xephyr() {
 	DISPLAY=:0 Xephyr +xinerama +extension RANDR \
-		-screen 800x644 -screen 800x600 \
+		-screen 1680x1050 \
 		-ac -resizeable :4 &
 }
 

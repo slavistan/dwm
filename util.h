@@ -8,4 +8,4 @@
 
 void die(const char *fmt, ...);
 void *ecalloc(size_t nmemb, size_t size);
-size_t split(char *s, const char* sep, size_t maxcount, char **pbegin);
+size_t partition(char *s, const char* sep, char **pbegin, size_t maxcount);
