@@ -72,6 +72,7 @@ enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
 enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms */
 enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle,
        ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
+enum { ClientRegular = 1, ClientSwallowee, ClientSwallower }; /* client types wrt. swallowing */
 
 typedef union {
 	int i;
@@ -821,7 +822,7 @@ destroynotify(XEvent *e)
 	switch (wintoclient2(ev->window, &c)) {
 	default: /* no client */
 		break;
-	case 1: /* regular client */
+	case ClientRegular:
 		unmanage(c, 1);
 		/* Remove queued swallow if client is destroyed. Note that regular
 		 * clients are the only type of client allowed to register for a
@@ -835,10 +836,10 @@ destroynotify(XEvent *e)
 			}
 		}
 		break;
-	case 2: /* swallowee */
+	case ClientSwallowee:
 		unmanageswallow(c, 1);
 		break;
-	case 3: /* swallower */
+	case ClientSwallower:
 		free(c->swallowedby);
 		c->swallowedby = NULL;
 		updateclientlist();
@@ -1026,7 +1027,7 @@ fakesignal(void)
 		 * allowed to swallow. Nested swallowing will be implemented in the
 		 * future. */
 		switch (wintoclient2(w, &c)) {
-		case 1: /* regular client */
+		case ClientRegular:
 			registerswallow(c, segments[2], segments[3], segments[4]);
 			break;
 		}
@@ -1042,8 +1043,8 @@ fakesignal(void)
 
 		winswer = strtoul(segments[1], NULL, 0);
 		winswee = strtoul(segments[2], NULL, 0);
-		if (wintoclient2(winswer, &swer) != 1
-			|| wintoclient2(winswee, &swee) != 1) {
+		if (wintoclient2(winswer, &swer) != ClientRegular
+			|| wintoclient2(winswee, &swee) != ClientRegular) {
 			return 1;
 		}
 
@@ -1551,7 +1552,7 @@ maprequest(XEvent *e)
 		return;
 
 	switch (wintoclient2(ev->window, &c)) {
-	case 3: /* swallower asks to be remapped */
+	case ClientSwallower: /* swallower asks to be remapped */
 		c->swallowedby->mon = c->mon;
 		c->swallowedby->next = c->next;
 		c->next = c->swallowedby;
@@ -1561,8 +1562,8 @@ maprequest(XEvent *e)
 		setclientstate(c->swallowedby, NormalState);
 		focus(NULL);
 		c->swallowedby = NULL;
-	case 1: /* regular client; fallthrough */
-	case 2: /* swallowee; fallthrough */
+	case ClientRegular: /* regular client; fallthrough */
+	case ClientSwallowee: /* swallowee; fallthrough */
 		return;
 	default:
 		break; /* No managed client */
@@ -2923,16 +2924,16 @@ wintoclient2(Window w, Client **pc)
 			if (c->win == w) {
 				if (!c->swallowedby) {
 					*pc = c;
-					return 1; /* regular client */
+					return ClientRegular;
 				}
 				else {
 					*pc = c;
-					return 2; /* swallowee */
+					return ClientSwallowee;
 				}
 			}
 			else if (c->swallowedby && c->swallowedby->win == w) {
 				*pc = c;
-				return 3; /* swallower */
+				return ClientSwallower;
 			}
 		}
 	}
@@ -3153,10 +3154,10 @@ main(int argc, char *argv[])
 //        - [x] delete (all) swallows from list
 //        - [ ] unswallow(): window, selected client, all clients (+ recursive later)
 //        - [x] swallow (active) clients
-//        - [ ] retroactive swallow (check swallows when wmname changes; req. for Zathura)
 //        - [ ] persistent swallow (swallow is not consumed)
 //        - [ ] swallow timeout mechanism
-//        - [ ] enum for types 0 - 3 of wintoclient2
+//        - [x] enum for types 0 - 3 of wintoclient2
+//        - [ ] retroactive swallow (check swallows when wmname changes; req. for Zathura)
 //        - [ ] nested swallow
 //        - OPT: Swallow existing clients by cursor selection (Shift+mod -> move into swallower)
 //        - OPT: Designate acive swallowed window by icon 👅
