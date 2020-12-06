@@ -93,7 +93,7 @@ typedef struct Client Client;
 struct Client {
 	char name[256]; /* window title */
 	float mina, maxa; /* size aspects info */
-	float cfact;
+	float cfact; /* relative size in slave area */
 	int x, y, w, h; /* win geometry in pixels */
 	int oldx, oldy, oldw, oldh; /* win geometry buffer (e.g. for fullscreen toggle) */
 	int basew, baseh, incw, inch, maxw, maxh, minw, minh; /* size hints */
@@ -435,6 +435,9 @@ applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 	return *x != c->x || *y != c->y || *w != c->w || *h != c->h;
 }
 
+/*
+ * TODO: What does arrange() do?
+ */
 void
 arrange(Monitor *m)
 {
@@ -997,8 +1000,6 @@ fakesignal(void)
 	static const char sep[] = "###";
 	static const char prefix[] = "#!";
 
-	Window w;
-	Client *c;
 	size_t numsegments, numargs;
 	char rootname[256];
 	char *segments[16] = {0};
@@ -1011,8 +1012,11 @@ fakesignal(void)
 	numsegments = split(rootname + sizeof(prefix) - 1, sep, segments, sizeof(segments));
 	numargs = numsegments - 1; /* number of parameters to the "command" */
 
-	if (!strcmp(segments[0], "swallow")) {
-		/* Params: windowid, class, instance, title */
+	if (!strcmp(segments[0], "swallowadd")) {
+		Window w;
+		Client *c;
+
+		/* Params: windowid, [class], [instance], [title] */
 		if (numargs == 0) { /* need at least a window id */
 			return 1;
 		}
@@ -1026,6 +1030,24 @@ fakesignal(void)
 			registerswallow(c, segments[2], segments[3], segments[4]);
 			break;
 		}
+	}
+	else if (!strcmp(segments[0], "swallowdo")) {
+		Client *swer, *swee;
+		Window winswer, winswee;
+
+		/* Params: swallower, swallowee */
+		if (numargs < 2) {
+			return 1;
+		}
+
+		winswer = strtoul(segments[1], NULL, 0);
+		winswee = strtoul(segments[2], NULL, 0);
+		if (wintoclient2(winswer, &swer) != 1
+			|| wintoclient2(winswee, &swee) != 1) {
+			return 1;
+		}
+
+		swallow(swer, swee);
 	}
 
 	return 1;
@@ -1426,7 +1448,7 @@ manageswallow(Client *s, Window w)
 	XWindowChanges wc;
 
 	/* Check whether existing client and new window are suitable targets for
-	 * swallowing.  Remove anything non-trivial, namely
+	 * swallowing. Remove anything non-trivial, namely
 	 *   - fullscreen swallowers
 	 *   - fullscreen swallowees (see updatewindowtype())
 	 *   - fixed-size swallowees
@@ -1438,7 +1460,7 @@ manageswallow(Client *s, Window w)
 	c->win = w;
 	c->swallowedby = s;
 
-	/* Copy relevant fields from swallowing client. TODO: Why not all fields? */
+	/* Copy relevant fields from swallowing client. */
 	c->mon = s->mon;
 	c->x = c->oldx = s->x;
 	c->y = c->oldy = s->y;
@@ -2286,12 +2308,16 @@ swallow(Client *swer, Client *swee)
 	detach(swee);
 	detachstack(swee);
 
-	/* Copy relevant fields into swee. TODO: Why not all fields. */
+	/* Copy relevant fields into swee. */
 	swee->mon = swer->mon;
-	swee->x = swee->oldx = swer->x;
-	swee->y = swee->oldy = swer->y;
-	swee->w = swee->oldw = swer->w;
-	swee->h = swee->oldh = swer->h;
+	swee->x = swer->x;
+	swee->y = swer->y;
+	swee->w = swer->w;
+	swee->h = swer->h;
+	swee->oldx = swer->oldx;
+	swee->oldy = swer->oldy;
+	swee->oldw = swer->oldw;
+	swee->oldh = swer->oldh;
 	swee->isfloating = swer->isfloating;
 	swee->bw = swer->bw;
 	swee->oldbw = swer->oldbw;
@@ -2305,7 +2331,8 @@ swallow(Client *swer, Client *swee)
 	attachstack(swee);
 
 	XUnmapWindow(dpy, swer->win);
-	// CONTINUEHERE: Implement swallow()
+	arrange(NULL); /* redraw all monitors */
+	focus(NULL); // TODO: keep focus unless focused client is swallower
 }
 
 void
@@ -2515,8 +2542,6 @@ unmanageswallow(Client *c, int destroyed)
 	updateclientlist();
 	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
 	XMapWindow(dpy, c->win);
-
-	// Redraw other monitor? arrange(NULL);
 }
 
 void
@@ -3099,10 +3124,6 @@ main(int argc, char *argv[])
 
 // TODO(fix): man pages
 
-// TODO: Ensure proper swallowing of windows which change their filter-relevant properties
-//       after config but before mapping.
-//       Example: `zathura <file>`
-
 // NOTE: dwm behaves differently inside Xephyr when using virtual monitors.
 //		 check recttomon(). When drawing bars somehow every monitor thinks
 //		 it's the selected.
@@ -3112,14 +3133,14 @@ main(int argc, char *argv[])
 // TODO: valgrind memcheck
 
 // TODO: Swallow features
-//        - delete (all) swallows from list
-//        - unswallow(): window, selected client, all clients (+ recursive later)
-//        - nested swallow
-//        - swallow (active) clients
-//        - retroactive swallow (check swallows when wmname changes)
-//        - persistent swallow (swallow is not consumed)
-//        - swallow timeout mechanism
-//        - enum for types 0 - 3 of wintoclient2
+//        - [ ] delete (all) swallows from list
+//        - [ ] unswallow(): window, selected client, all clients (+ recursive later)
+//        - [x] swallow (active) clients
+//        - [ ] retroactive swallow (check swallows when wmname changes; req. for Zathura)
+//        - [ ] persistent swallow (swallow is not consumed)
+//        - [ ] swallow timeout mechanism
+//        - [ ] enum for types 0 - 3 of wintoclient2
+//        - [ ] nested swallow
 //        - OPT: Swallow existing clients by cursor selection (Shift+mod -> move into swallower)
 //        - OPT: Designate acive swallowed window by icon 👅
 //        - TEST: What happens if a swallowee gets unmapped/destroyed?

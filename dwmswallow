@@ -10,36 +10,65 @@ match everything.
 EOF
 }
 
-if [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ $# -eq 0 ]; then
-	usage >&2
-	exit 1
-fi
+swallowadd() {
+	ii=1
+	class=
+	instance=
+	title=
+	while [ $ii -le $# ]; do
+		eval "arg=\$$ii"
+		eval "val=\$$((ii + 1))"
+		case "$arg" in
+		-c)
+			class="$val"
+			;;
+		-i)
+			instance="$val"
+			;;
+		-t)
+			title="$val"
+			;;
+		*)
+			usage >&2
+			exit 1
+			;;
+		esac
+		ii=$((ii + 2))
+	done
+
+	name="$(printf "${PREFIX}swallowadd${SEP}%u${SEP}%s${SEP}%s${SEP}%s" "$wid" "$class" "$instance" "$title")"
+echo "Setting xrootname to:\n\t'$name'\n"
+	xsetroot -name "$name"
+}
+
+swallowdo() {
+	[ ! $# -eq 2 ] && { usage >&2; exit 1; }
+
+	widswer="$1"
+	widswee="$2"
+
+	name="$(printf "${PREFIX}swallowdo${SEP}%u${SEP}%u" "$widswer" "$widswee")"
+echo "Setting xrootname to:\n\t'$name'\n"
+	xsetroot -name "$name"
+}
 
 SEP='###' # As defined in dwm.c:fakesignal()
 PREFIX='#!'
-wid="$1"
-ii=2
-while [ $ii -le $# ]; do
-	eval "arg=\$$ii"
-	eval "val=\$$((ii + 1))"
-	case "$arg" in
-	-c)
-		class="$val"
-		;;
-	-i)
-		instance="$val"
-		;;
-	-t)
-		title="$val"
-		;;
-	*)
-		usage >&2
-		exit 1
-		;;
-	esac
-	ii=$((ii + 2))
-done
 
-name="$(printf "${PREFIX}swallow${SEP}%u${SEP}%s${SEP}%s${SEP}%s" "$wid" "$class" "$instance" "$title")"
-echo "Setting xrootname to:\n\t'$name'\n"
-xsetroot -name "$name"
+case "$1" in
+-h|--help)
+	usage
+	;;
+add)
+	shift
+	swallowadd "$@"
+	;;
+do)
+	shift
+	swallowdo "$@"
+	;;
+*)
+	usage >&2
+	exit 1
+	;;
+esac
