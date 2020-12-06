@@ -988,6 +988,7 @@ fakesignal(void)
 
 	/* Syntax: <SEP><COMMAND>[<SEP><ARG>]... */
 	static const char sep[] = "###";
+	static const char prefix[] = "#!";
 
 	Window w;
 	Client *c;
@@ -997,25 +998,25 @@ fakesignal(void)
 
 	/* Get root name, split by separator and find the prefix */
 	if (!gettextprop(root, XA_WM_NAME, rootname, sizeof(rootname))
-		|| (numsegments = partition(rootname, sep, segments, sizeof(segments))) < 2
-		|| strncmp(segments[0], sep, sizeof(sep) - 1)) {
+		|| strncmp(rootname, prefix, sizeof(prefix) - 1)) {
 		return 0;
 	}
+	numsegments = split(rootname + sizeof(prefix) - 1, sep, segments, sizeof(segments));
+	numargs = numsegments - 1; /* number of parameters to the "command" */
 
-	numargs = numsegments - 2; /* number of parameters to the "command" */
-	if (!strcmp(segments[1], "swallow")) {
+	if (!strcmp(segments[0], "swallow")) {
 		/* Params: windowid, class, instance, title */
-		if (numargs < 1) { /* need at least a window id */
+		if (numargs == 0) { /* need at least a window id */
 			return 1;
 		}
-		w = strtoul(segments[2], NULL, 0);
+		w = strtoul(segments[1], NULL, 0);
 
 		/* Only regular clients, i.e. clients not involved in a swallow are
 		 * allowed to swallow. Nested swallowing will be implemented in the
 		 * future. */
 		switch (wintoclient2(w, &c)) {
 		case 1: /* regular client */
-			registerswallow(c, segments[3], segments[4], segments[5]);
+			registerswallow(c, segments[2], segments[3], segments[4]);
 			break;
 		}
 	}
@@ -2865,9 +2866,9 @@ wintoswallow(Window w)
 	/* Search for matching swallow. Compare class, instance and title. Any
 	 * unset property implies a wildcard */
 	for (s = swallows; s; s = s->next) {
-		if ((!ch.res_class || !strcmp(s->class, ch.res_class)) &&
-			(!ch.res_name || !strcmp(s->inst, ch.res_name)) &&
-			(title[0] == '\0' || !strcmp(s->title, title)))
+		if ((!ch.res_class || strstr(ch.res_class, s->class))
+			&& (!ch.res_name || strstr(ch.res_name, s->inst))
+			&& (title[0] == '\0' || strstr(title, s->title)))
 			break;
 	}
 
@@ -3065,4 +3066,5 @@ main(int argc, char *argv[])
 //        - unswallow()
 //        - nested swallow
 //        - swallow (active) clients
+//        - What happens if a swallowee gets unmapped/destroyed?
 //

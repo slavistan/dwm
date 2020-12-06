@@ -9,9 +9,13 @@ the class name, instance name and window title filters.
 EOF
 }
 
-SEP='###' # As defined in dwm.c:fakesignal()
+if [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ $# -eq 0 ]; then
+	usage >&2
+	exit 1
+fi
 
-[ $# -eq 0 ] && { usage >&2; exit 1; }
+SEP='###' # As defined in dwm.c:fakesignal()
+PREFIX='#!'
 wid="$1"
 ii=2
 while [ $ii -le $# ]; do
@@ -35,6 +39,6 @@ while [ $ii -le $# ]; do
 	ii=$((ii + 2))
 done
 
-name="$(printf "${SEP}swallow${SEP}%u${SEP}%s${SEP}%s${SEP}%s" "$wid" "$class" "$instance" "$title")"
+name="$(printf "${PREFIX}swallow${SEP}%u${SEP}%s${SEP}%s${SEP}%s" "$wid" "$class" "$instance" "$title")"
 echo "Setting xrootname to:\n\t'$name'\n"
 xsetroot -name "$name"

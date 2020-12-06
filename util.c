@@ -41,12 +41,12 @@ die(const char *fmt, ...) {
  * 'pbegin'. Only the first 'maxcount' segments will be written if
  * maxcount > 0.
  *
- * Inspired by python's partition but allows for empty partitions.
- * CONTINUEHERE: Fix partition() to output partitions before and after every
+ * Inspired by python's split.
+ * CONTINUEHERE: Fix split() to output partitions before and after every
  * separator.
  */
 size_t
-partition(char *s, const char* sep, char **pbegin, size_t maxcount) {
+split(char *s, const char* sep, char **pbegin, size_t maxcount) {
 
 	char *p, *q;
 	const size_t seplen = strlen(sep);
@@ -58,6 +58,10 @@ partition(char *s, const char* sep, char **pbegin, size_t maxcount) {
 		pbegin[count] = p;
 		*q = '\0';
 		p = q + seplen;
+		count++;
+	}
+	if (count < maxcount) {
+		pbegin[count] = p;
 		count++;
 	}
 	return count;
