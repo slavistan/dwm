@@ -201,7 +201,6 @@ static void grabkeys(void);
 static void incnmaster(const Arg *arg);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
-static void registerswallow(Client *c, const char* class, const char* inst, const char* title);
 static void manage(Window w, XWindowAttributes *wa);
 static void manageswallow(Client *c, Window w);
 static void mappingnotify(XEvent *e);
@@ -215,7 +214,6 @@ static void pop(Client *);
 static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
 static Monitor *recttomon(int x, int y, int w, int h);
-static void removeswallow(Swallow *s);
 static void resize(Client *c, int x, int y, int w, int h, int interact);
 static void resizeclient(Client *c, int x, int y, int w, int h);
 static void resizemouse(const Arg *arg);
@@ -239,7 +237,11 @@ static void sigchld(int unused);
 static void sighup(int unused);
 static void sigterm(int unused);
 static void spawn(const Arg *arg);
-static void swallow(Client *swer, Client *swee);
+static void swal(Client *swer, Client *swee);
+static void swaladd(Client *c, const char* class, const char* inst, const char* title);
+static void swalrm(Swallow *s);
+static void swalstop(Client *c);
+static void swalstopsel(const Arg *arg);
 static void statusclick(const Arg *arg);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
@@ -252,7 +254,6 @@ static void unfocus(Client *c, int setfocus);
 static void unmanage(Client *c, int destroyed);
 static void unmanageswallow(Client *c, int destroyed);
 static void unmapnotify(XEvent *e);
-static Client* unswallow(Client *c);
 static void updatebarpos(Monitor *m);
 static void updatebars(void);
 static void updateclientlist(void);
@@ -508,8 +509,9 @@ attachstack(Client *c)
 	c->mon->stack = c;
 }
 
-void buttonpress(XEvent *e) {
-
+void
+buttonpress(XEvent *e)
+{
 	/* In addition to clicks on the rootwin, the bars and unfocused top-level
 	 * windows, buttonpress events for clicks on clients are received for all
 	 * button/modifier pairs as defined in setup()'s call to grabbuttons(). */
@@ -831,7 +833,7 @@ destroynotify(XEvent *e)
 		if (swallows) {
 			for (s = swallows; s; s = s->next) {
 				if (c == s->client) {
-					removeswallow(s);
+					swalrm(s);
 					break; /* max. 1 queued swallow per client */
 				}
 			}
@@ -940,6 +942,11 @@ drawbar(Monitor *m)
 	drw_setscheme(drw, scheme[SchemeNorm]);
 	x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
 
+	if (m->sel && m->sel->swallowedby) {
+		w = TEXTW(swalsymb);
+		x = drw_text(drw, x, 0, w, bh, lrpad / 2, swalsymb, 0);
+	}
+
 	if ((w = m->ww - sw - x) > bh) { // larger than bar height? the fuck?
 		if (m->sel) {
 			drw_setscheme(drw, scheme[SchemeNorm]);
@@ -1029,7 +1036,7 @@ fakesignal(void)
 		 * future. */
 		switch (wintoclient2(w, &c)) {
 		case ClientRegular:
-			registerswallow(c, segments[2], segments[3], segments[4]);
+			swaladd(c, segments[2], segments[3], segments[4]);
 			break;
 		}
 	}
@@ -1049,7 +1056,7 @@ fakesignal(void)
 			return 1;
 		}
 
-		swallow(swer, swee);
+		swal(swer, swee);
 	}
 	else if (!strcmp(segments[0], "swallowrm")) {
 		/* Params: None */
@@ -1057,7 +1064,7 @@ fakesignal(void)
 			return 1;
 		}
 
-		removeswallow(NULL);
+		swalrm(NULL);
 	}
 	else if (!strcmp(segments[0], "swallowstop")) {
 		Client *swee;
@@ -1073,7 +1080,7 @@ fakesignal(void)
 			return 1;
 		}
 
-		unswallow(swee);
+		swalstop(swee);
 	}
 
 	return 1;
@@ -1338,10 +1345,10 @@ killclient(const Arg *arg)
  * 'class', 'inst' and 'title' shall point null-terminated strings or be NULL,
  * implying a wildcard. If 'c' corresponds to an existing swallow, the
  * swallow's filters are updated and no new swallow instance is created.
- * Complement to removeswallow().
+ * Complement to swalrm().
  */
 void
-registerswallow(Client *c, const char *class, const char *inst, const char *title)
+swaladd(Client *c, const char *class, const char *inst, const char *title)
 {
 	/*
 	 * Unsafe; Caller must ensure that 'c'
@@ -1593,7 +1600,7 @@ maprequest(XEvent *e)
 	}
 	else {
 		manageswallow(s->client, ev->window);
-		removeswallow(s);
+		swalrm(s);
 	}
 
 }
@@ -1824,11 +1831,11 @@ recttomon(int x, int y, int w, int h)
 
 /*
  * Remove swallow instance from list of swallows and free its resources.
- * Complement to registerswallow(). If NULL is passed every swallow is
+ * Complement to swaladd(). If NULL is passed every swallow is
  * deleted from the list.
  */
 void
-removeswallow(Swallow *s)
+swalrm(Swallow *s)
 {
 	Swallow *t, **ps;
 
@@ -2325,7 +2332,7 @@ spawn(const Arg *arg)
  * Perform swallow for two clients.
  */
 void
-swallow(Client *swer, Client *swee)
+swal(Client *swer, Client *swee)
 {
 	/* Unsafe; Caller must ensure swallower and swallowee are valid
 	 * participants in a swallow; COMBAK: nestedswallow */
@@ -2338,7 +2345,7 @@ swallow(Client *swer, Client *swee)
 	if (swallows) {
 		for (s = swallows; s; s = s->next) {
 			if (swee == s->client || swer == s->client) {
-				removeswallow(s);
+				swalrm(s);
 			}
 		}
 	}
@@ -2372,6 +2379,16 @@ swallow(Client *swer, Client *swee)
 	XUnmapWindow(dpy, swer->win);
 	arrange(NULL); /* redraw all monitors */
 	focus(NULL); // TODO: keep focus unless focused client is swallower
+}
+
+/*
+ * Stops active swallow for currently selected client
+ */
+void
+swalstopsel(const Arg *arg)
+{
+	if (selmon->sel && selmon->sel->swallowedby)
+		swalstop(selmon->sel);
 }
 
 void
@@ -2602,7 +2619,7 @@ unmapnotify(XEvent *e) {
 		if (swallows) {
 			for (s = swallows; s; s = s->next) {
 				if (c == s->client) {
-					removeswallow(s);
+					swalrm(s);
 					break; /* max. 1 queued swallow per client. No need to continue search. */
 				}
 			}
@@ -2625,18 +2642,18 @@ unmapnotify(XEvent *e) {
 }
 
 /*
- * Unswallows a swallowee re-mapping swallower and attaching behind it. Returns
- * pointer to swallower.
+ * Stop an active swallow. Unswallows a swallowee, re-maps the swallower and
+ * attaches it behind the swallowee. Returns pointer to swallower.
  */
-Client*
-unswallow(Client *swee)
+void
+swalstop(Client *swee)
 {
 	/* COMBAK: nestedswallow */
 
 	Client *swer;
 
 	if (!swee || !swee->swallowedby)
-		return NULL;
+		return;
 
 	swer = swee->swallowedby;
 	swee->swallowedby = NULL;
@@ -2653,10 +2670,7 @@ unswallow(Client *swee)
 	/* Calculate geom and map */
 	arrange(swer->mon);
 	XMapWindow(dpy, swer->win);
-
-	return swer;
 }
-
 
 void
 updatebars(void)
@@ -3206,22 +3220,30 @@ main(int argc, char *argv[])
 // TODO: valgrind memcheck
 
 // TODO: Swallow features
-//        - [x] delete (all) swallows from list
-//        - [ ] unswallow(): window, selected client, all clients (+ recursive later)
-//        - [x] swallow (active) clients
+//        - [x] delete swallows from list
+//           - [x] by swallow 's'
+//           - [x] all
+//           - [x] by window (indirect: wintoswallow)
+//        - [ ] unswallow: swalstop()
+//           - [x] by client
+//           - [x] by window (indirect)
+//           - [x] selected client (hotkey)
+//           - [ ] all clients
+//           - [ ] recursive (later)
+//        - [x] swallow (active) clients by window
 //        - [x] enum for types 0 - 3 of wintoclient2
 //        - [ ] swallow timeout mechanism
 //        - [ ] retroactive swallow (check swallows when wmname changes; req. for Zathura)
 //        - [ ] persistent swallow (swallow is not consumed)
 //        - [ ] nested swallow
-//        - OPT: Swallow existing clients by cursor selection (Shift+mod -> move into swallower)
-//        - OPT: Designate acive swallowed window by icon 👅
+//        - [ ]: Swallow existing clients by cursor selection (Shift+mod -> move into swallower)
+//        - [x]: Designate acive swallowed window by icon 👅
 //        - TEST: What happens if a swallowee gets unmapped/destroyed?
 //        - TEST: Swallow on multiple monitors
 //        - TEST: Run in release mode (no XSYNCHRONIZE)
 //        - TEST: Fullscreen swallows
 //        - TEST: Floating swallows
-//        - IDEA: Rename to swallowadd(), rm(), ... to match cli
+//        - IDEA: Rename cli to match swal*** names
 
 // Nested swallowing:
 // - If a swallowee is unmapped/destroyed anywhere in a swallow chain map it as a regular client.

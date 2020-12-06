@@ -17,7 +17,7 @@ static const char col_white[]      = "#ffffff";
 static const float barpady         = 12; /* y-padding of bar; if ≤ 1, padding is rel. to font height, otherwise absolute in pixels */
 static const unsigned int baralpha = OPAQUE;
 static const unsigned int borderalpha = OPAQUE;
-static const char swallowsymb[] = "👅";
+static const char swalsymb[] = "👅";
 static const char *colors[][3]     = {
 	/*               fg       , bg       , border */
 	[SchemeNorm] = { col_white, col_gray1, col_gray1 },
@@ -86,6 +86,7 @@ static Key keys[] = {
 	{ MODKEY|ShiftMask            , XK_comma , setmfact      , {.f = -0.05} }      , // dec master area
 	{ MODKEY|ShiftMask            , XK_period, setmfact      , {.f = +0.05} }      , // inc master area
 	{ MODKEY|ShiftMask            , XK_Return, zoom          , {0} }               , // raise to top of stack
+	{ MODKEY                      , XK_u     , swalstopsel   , {0} }               ,
 	{ MODKEY                      , XK_Tab   , view          , {0} }               , // select previous tag
 	{ MODKEY                      , XK_q     , killclient    , {0} }               ,
 	{ MODKEY                      , XK_minus , setcfact      , {.f = -0.25} }      ,
