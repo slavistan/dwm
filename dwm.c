@@ -1049,6 +1049,14 @@ fakesignal(void)
 
 		swallow(swer, swee);
 	}
+	else if (!strcmp(segments[0], "swallowrm")) {
+		/* Params: None */
+		if (numargs > 0) {
+			return 1;
+		}
+
+		removeswallow(NULL);
+	}
 
 	return 1;
 }
@@ -1796,18 +1804,27 @@ recttomon(int x, int y, int w, int h)
 }
 
 /*
- * Detach swallow and free resources. Complement to registerswallow().
+ * Remove swallow instance from list of swallows and free its resources.
+ * Complement to registerswallow(). If NULL is passed every swallow is
+ * deleted from the list.
  */
 void
 removeswallow(Swallow *s)
 {
-	/* Unsafe: s mustn't be NULL */
+	Swallow *t, **ps;
 
-	Swallow **ps;
-
-	for (ps = &swallows; *ps && *ps != s; ps = &(*ps)->next);
-	*ps = s->next;
-	free(s);
+	if (s) {
+		for (ps = &swallows; *ps && *ps != s; ps = &(*ps)->next);
+		*ps = s->next;
+		free(s);
+	}
+	else {
+		for(s = swallows; s; s = t) {
+			t = s->next;
+			free(s);
+		}
+		swallows = NULL;
+	}
 }
 
 void
@@ -3133,7 +3150,7 @@ main(int argc, char *argv[])
 // TODO: valgrind memcheck
 
 // TODO: Swallow features
-//        - [ ] delete (all) swallows from list
+//        - [x] delete (all) swallows from list
 //        - [ ] unswallow(): window, selected client, all clients (+ recursive later)
 //        - [x] swallow (active) clients
 //        - [ ] retroactive swallow (check swallows when wmname changes; req. for Zathura)
@@ -3148,6 +3165,7 @@ main(int argc, char *argv[])
 //        - TEST: Run in release mode (no XSYNCHRONIZE)
 //        - TEST: Fullscreen swallows
 //        - TEST: Floating swallows
+//        - IDEA: Rename to swallowadd(), rm(), ... to match cli
 
 // Nested swallowing:
 // - If a swallowee is unmapped/destroyed anywhere in a swallow chain map it as a regular client.

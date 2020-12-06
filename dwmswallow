@@ -11,10 +11,13 @@ EOF
 }
 
 swallowadd() {
-	ii=1
+	[ $# -le 1 ] && { usage >&2; exit 1; }
+
+	wid="$1"
 	class=
 	instance=
 	title=
+	ii=2
 	while [ $ii -le $# ]; do
 		eval "arg=\$$ii"
 		eval "val=\$$((ii + 1))"
@@ -52,6 +55,13 @@ echo "Setting xrootname to:\n\t'$name'\n"
 	xsetroot -name "$name"
 }
 
+swallowrm() {
+	[ ! $# -eq 0 ] && { usage >&2; exit 1; }
+	name="$(printf "${PREFIX}swallowrm")"
+echo "Setting xrootname to:\n\t'$name'\n"
+	xsetroot -name "$name"
+}
+
 SEP='###' # As defined in dwm.c:fakesignal()
 PREFIX='#!'
 
@@ -66,6 +76,10 @@ add)
 do)
 	shift
 	swallowdo "$@"
+	;;
+rm)
+	shift
+	swallowrm "$@"
 	;;
 *)
 	usage >&2
