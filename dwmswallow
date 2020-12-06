@@ -55,6 +55,16 @@ echo "Setting xrootname to:\n\t'$name'\n"
 	xsetroot -name "$name"
 }
 
+swallowstop() {
+	[ ! $# -eq 1 ] && { usage >&2; exit 1; }
+
+	widswee="$1"
+
+	name="$(printf "${PREFIX}swallowstop${SEP}%u" "$widswee")"
+echo "Setting xrootname to:\n\t'$name'\n"
+	xsetroot -name "$name"
+}
+
 swallowrm() {
 	[ ! $# -eq 0 ] && { usage >&2; exit 1; }
 	name="$(printf "${PREFIX}swallowrm")"
@@ -76,6 +86,10 @@ add)
 do)
 	shift
 	swallowdo "$@"
+	;;
+stop)
+	shift
+	swallowstop "$@"
 	;;
 rm)
 	shift

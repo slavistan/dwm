@@ -252,6 +252,7 @@ static void unfocus(Client *c, int setfocus);
 static void unmanage(Client *c, int destroyed);
 static void unmanageswallow(Client *c, int destroyed);
 static void unmapnotify(XEvent *e);
+static Client* unswallow(Client *c);
 static void updatebarpos(Monitor *m);
 static void updatebars(void);
 static void updateclientlist(void);
@@ -1058,6 +1059,22 @@ fakesignal(void)
 
 		removeswallow(NULL);
 	}
+	else if (!strcmp(segments[0], "swallowstop")) {
+		Client *swee;
+		Window winswee;
+
+		/* Params: swallowee window */
+		if (numargs == 0) {
+			return 1;
+		}
+
+		winswee = strtoul(segments[1], NULL, 0);
+		if (wintoclient2(winswee, &swee) != ClientSwallowee) {
+			return 1;
+		}
+
+		unswallow(swee);
+	}
 
 	return 1;
 }
@@ -1553,6 +1570,7 @@ maprequest(XEvent *e)
 
 	switch (wintoclient2(ev->window, &c)) {
 	case ClientSwallower: /* swallower asks to be remapped */
+		/* TODO: Maybe reload hints from window here? */
 		c->swallowedby->mon = c->mon;
 		c->swallowedby->next = c->next;
 		c->next = c->swallowedby;
@@ -2303,6 +2321,9 @@ spawn(const Arg *arg)
 	}
 }
 
+/*
+ * Perform swallow for two clients.
+ */
 void
 swallow(Client *swer, Client *swee)
 {
@@ -2602,6 +2623,40 @@ unmapnotify(XEvent *e) {
 		}
 	}
 }
+
+/*
+ * Unswallows a swallowee re-mapping swallower and attaching behind it. Returns
+ * pointer to swallower.
+ */
+Client*
+unswallow(Client *swee)
+{
+	/* COMBAK: nestedswallow */
+
+	Client *swer;
+
+	if (!swee || !swee->swallowedby)
+		return NULL;
+
+	swer = swee->swallowedby;
+	swee->swallowedby = NULL;
+
+	/* TODO: Maybe reload hints from window here? */
+	/* Set fields */
+	swer->mon = swee->mon;
+
+	/* Attach */
+	swer->next = swee->next;
+	swee->next = swer;
+	attachstack(swer);
+
+	/* Calculate geom and map */
+	arrange(swer->mon);
+	XMapWindow(dpy, swer->win);
+
+	return swer;
+}
+
 
 void
 updatebars(void)
@@ -3154,10 +3209,10 @@ main(int argc, char *argv[])
 //        - [x] delete (all) swallows from list
 //        - [ ] unswallow(): window, selected client, all clients (+ recursive later)
 //        - [x] swallow (active) clients
-//        - [ ] persistent swallow (swallow is not consumed)
-//        - [ ] swallow timeout mechanism
 //        - [x] enum for types 0 - 3 of wintoclient2
+//        - [ ] swallow timeout mechanism
 //        - [ ] retroactive swallow (check swallows when wmname changes; req. for Zathura)
+//        - [ ] persistent swallow (swallow is not consumed)
 //        - [ ] nested swallow
 //        - OPT: Swallow existing clients by cursor selection (Shift+mod -> move into swallower)
 //        - OPT: Designate acive swallowed window by icon 👅
