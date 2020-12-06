@@ -2,10 +2,11 @@
 
 usage() {
 	cat <<EOF
-Usage: $0 WINDOW [-c CLASS] [-i INSTANCE] [-t TITLE]
+Usage: $0 SWALLOWER [-c CLASS] [-i INSTANCE] [-t TITLE]
 
-Queue window WINDOW to swallow the next mapped window whose attributes match
-the class name, instance name and window title filters.
+Queue window SWALLOWER to swallow the next mapped window whose attributes match
+the CLASS name, INSTANCE name and window TITLE filters. An empty filters will
+match everything.
 EOF
 }
 

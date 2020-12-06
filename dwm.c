@@ -1327,7 +1327,7 @@ registerswallow(Client *c, const char *class, const char *inst, const char *titl
 	if (inst)
 		strncpy(s->inst, inst, sizeof(s->inst) - 1);
 	if (title)
-		strncpy(s->title, inst, sizeof(s->title) - 1);
+		strncpy(s->title, title, sizeof(s->title) - 1);
 
 	/* Attach new swallow at top of the list */
 	s->next = swallows;
@@ -1736,7 +1736,7 @@ propertynotify(XEvent *e)
 		 * atoms). */
 		if (ev->atom == XA_WM_NAME || ev->atom == netatom[NetWMName]) {
 			/* Update client's preferred display name */
-			updatetitle(c);
+			updatetitle(c); // TODO: As title now contains the classname this no longer makes sense.
 			if (c == c->mon->sel)
 				drawbar(c->mon);
 		}
@@ -2469,12 +2469,12 @@ unmanageswallow(Client *c, int destroyed)
 
 void
 unmapnotify(XEvent *e) {
-  /*
-   * UnmapNotify gets triggered multiple times per closing window. Once for the
-   * window itself, and once again due to it being a child of the root window.
-   * as the WM is listening for SubstructureNotify events, which include
-   * events of any of the root's children, right?
-   */
+	/*
+	 * UnmapNotify gets triggered multiple times per closing window. Once for the
+	 * window itself, and once again due to it being a child of the root window.
+	 * as the WM is listening for SubstructureNotify events, which include
+	 * events of any of the root's children, right?
+	 */
 
 	Client *c;
 	XUnmapEvent *ev = &e->xunmap;
@@ -2487,7 +2487,7 @@ unmapnotify(XEvent *e) {
 			for (s = swallows; s; s = s->next) {
 				if (c == s->client) {
 					removeswallow(s);
-					break; /* max. 1 queued swallow per client */
+					break; /* max. 1 queued swallow per client. No need to continue search. */
 				}
 			}
 		}
@@ -3048,8 +3048,8 @@ main(int argc, char *argv[])
 // TODO(fix): man pages
 
 // TODO: Ensure proper swallowing of windows which change their filter-relevant properties
-//	     after config but before mapping.
-//			  Example: `zathura <file>`
+//       after config but before mapping.
+//       Example: `zathura <file>`
 
 // NOTE: dwm behaves differently inside Xephyr when using virtual monitors.
 //		 check recttomon(). When drawing bars somehow every monitor thinks
@@ -3057,14 +3057,22 @@ main(int argc, char *argv[])
 
 // TODO: Check build with -Wall -pedantic
 
-// TODO: Implement swallow mechanism for existing clients.
-
 // TODO: valgrind memcheck
 
 // TODO: Swallow features
-// 		  - delete (all) swallows from list
-//        - unswallow()
+//        - delete (all) swallows from list
+//        - unswallow(): window, selected client, all clients (+ recursive later)
 //        - nested swallow
 //        - swallow (active) clients
-//        - What happens if a swallowee gets unmapped/destroyed?
-//
+//        - retroactive swallow (check swallows when wmname changes)
+//        - persistent swallow (swallow is not consumed)
+//        - swallow timeout mechanism
+//        - enum for types 0 - 3 of wintoclient2
+//        - OPT: Swallow existing clients by cursor selection (Shift+mod -> move into swallower)
+//        - OPT: Designate acive swallowed window by icon 👅
+//        - TEST: What happens if a swallowee gets unmapped/destroyed?
+//        - TEST: Swallow on multiple monitors
+//        - TEST: Run in release mode (no XSYNCHRONIZE)
+
+// Nested swallowing:
+// - If a swallowee is unmapped/destroyed anywhere in a swallow chain map it as a regular client.
