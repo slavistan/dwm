@@ -238,6 +238,7 @@ static void sigchld(int unused);
 static void sighup(int unused);
 static void sigterm(int unused);
 static void spawn(const Arg *arg);
+static void swallow(Client *swer, Client *swee);
 static void statusclick(const Arg *arg);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
@@ -468,7 +469,8 @@ arrangemon(Monitor *m)
 }
 
 /*
- * Attach client at the front of its monitor's client list
+ * Attach client at the front of its monitor's client list.
+ * Assumes c->mon is set.
  */
 void
 attach(Client *c)
@@ -478,7 +480,8 @@ attach(Client *c)
 }
 
 /*
- * Attach client to end of its monitor's client list
+ * Attach client to end of its monitor's client list.
+ * Assumes c->mon is set.
  */
 void
 attachbottom(Client *c)
@@ -892,6 +895,10 @@ dirtomon(int dir)
 void
 drawbar(Monitor *m)
 {
+	// TODO: Simplify drawbar()
+	//       The current implementation is a leftover from the original
+	//       which uses three color schemes.
+
 	int x, w, sw, pad = 0;
 	int boxs = drw->fonts->h / 9;
 	int boxw = drw->fonts->h / 6 + 2;
@@ -1431,7 +1438,7 @@ manageswallow(Client *s, Window w)
 	c->win = w;
 	c->swallowedby = s;
 
-	/* Copy relevant fields from swallowing client. */
+	/* Copy relevant fields from swallowing client. TODO: Why not all fields? */
 	c->mon = s->mon;
 	c->x = c->oldx = s->x;
 	c->y = c->oldy = s->y;
@@ -2257,6 +2264,51 @@ spawn(const Arg *arg)
 }
 
 void
+swallow(Client *swer, Client *swee)
+{
+	/* Unsafe; Caller must ensure swallower and swallowee are valid
+	 * participants in a swallow; COMBAK: nestedswallow */
+
+	Client **pc;
+	Swallow *s;
+
+	/* Remove any registered swallows for the participants.
+	 * COMBAK: nestedswallow */
+	if (swallows) {
+		for (s = swallows; s; s = s->next) {
+			if (swee == s->client || swer == s->client) {
+				removeswallow(s);
+			}
+		}
+	}
+
+	/* Detach swee */
+	detach(swee);
+	detachstack(swee);
+
+	/* Copy relevant fields into swee. TODO: Why not all fields. */
+	swee->mon = swer->mon;
+	swee->x = swee->oldx = swer->x;
+	swee->y = swee->oldy = swer->y;
+	swee->w = swee->oldw = swer->w;
+	swee->h = swee->oldh = swer->h;
+	swee->isfloating = swer->isfloating;
+	swee->bw = swer->bw;
+	swee->oldbw = swer->oldbw;
+	swee->cfact = swer->cfact;
+	swee->swallowedby = swer;
+
+	/* Swap swallowee into stack */
+	for (pc = &swer->mon->clients; *pc && *pc != swer; pc = &(*pc)->next);
+	*pc = swee;
+	swee->next = swer->next;
+	attachstack(swee);
+
+	XUnmapWindow(dpy, swer->win);
+	// CONTINUEHERE: Implement swallow()
+}
+
+void
 statusclick(const Arg *arg)
 {
 	const unsigned mbutton = arg->ui >> (sizeof(unsigned) * CHAR_BIT - 3);
@@ -3073,6 +3125,8 @@ main(int argc, char *argv[])
 //        - TEST: What happens if a swallowee gets unmapped/destroyed?
 //        - TEST: Swallow on multiple monitors
 //        - TEST: Run in release mode (no XSYNCHRONIZE)
+//        - TEST: Fullscreen swallows
+//        - TEST: Floating swallows
 
 // Nested swallowing:
 // - If a swallowee is unmapped/destroyed anywhere in a swallow chain map it as a regular client.

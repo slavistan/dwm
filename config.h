@@ -17,6 +17,7 @@ static const char col_white[]      = "#ffffff";
 static const float barpady         = 12; /* y-padding of bar; if ≤ 1, padding is rel. to font height, otherwise absolute in pixels */
 static const unsigned int baralpha = OPAQUE;
 static const unsigned int borderalpha = OPAQUE;
+static const char swallowsymb[] = "👅";
 static const char *colors[][3]     = {
 	/*               fg       , bg       , border */
 	[SchemeNorm] = { col_white, col_gray1, col_gray1 },
