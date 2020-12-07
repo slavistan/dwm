@@ -64,7 +64,7 @@
 #endif
 
 /* enums */
-enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor */
+enum { CurNormal, CurResize, CurMove, CurSwal, CurLast }; /* cursor */
 enum { SchemeNorm, SchemeSel, SchemeStatus }; /* color schemes */
 enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
        NetWMFullscreen, NetActiveWindow, NetWMWindowType,
@@ -239,6 +239,7 @@ static void sigterm(int unused);
 static void spawn(const Arg *arg);
 static void swal(Client *swer, Client *swee);
 static void swaladd(Client *c, const char* class, const char* inst, const char* title);
+static void swalmouse(const Arg *arg);
 static void swalrm(Swallow *s);
 static void swalstop(Client *c);
 static void swalstopsel(const Arg *arg);
@@ -1829,6 +1830,39 @@ recttomon(int x, int y, int w, int h)
 	return r;
 }
 
+void
+swalmouse(const Arg *arg)
+{
+	Client *swer, *swee;
+	XEvent ev;
+
+	if (!(swee = selmon->sel))
+		return;
+	if (swee->isfullscreen)
+		return; /* no swallowing of fullscreen windows */
+
+	if (XGrabPointer(dpy, root, False, ButtonPressMask|ButtonReleaseMask, GrabModeAsync,
+		GrabModeAsync, None, cursor[CurSwal]->cursor, CurrentTime) != GrabSuccess)
+		return;
+
+	do {
+		XMaskEvent(dpy, MOUSEMASK|ExposureMask|SubstructureRedirectMask, &ev);
+		switch(ev.type) {
+		case ConfigureRequest: /* fallthrough */
+		case Expose: /* fallthrough */
+		case MapRequest:
+			handler[ev.type](&ev);
+			break;
+		}
+	} while (ev.type != ButtonRelease);
+	XUngrabPointer(dpy, CurrentTime);
+	if (wintoclient2(ev.xbutton.subwindow, &swer) == ClientRegular
+		&& !swer->isfullscreen
+		&& swer != swee)
+		swal(swer, swee);
+	XCheckMaskEvent(dpy, EnterWindowMask, &ev); /* Remove accumulated pending EnterWindow events */
+}
+
 /*
  * Remove swallow instance from list of swallows and free its resources.
  * Complement to swaladd(). If NULL is passed every swallow is
@@ -1928,7 +1962,7 @@ resizemouse(const Arg *arg)
 	} while (ev.type != ButtonRelease);
 	XWarpPointer(dpy, None, c->win, 0, 0, 0, 0, c->w + c->bw - 1, c->h + c->bw - 1);
 	XUngrabPointer(dpy, CurrentTime);
-	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
+	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev)); /* Remove accumulated pending EnterWindow events */
 	if ((m = recttomon(c->x, c->y, c->w, c->h)) != selmon) {
 		sendmon(c, m);
 		selmon = m;
@@ -2220,6 +2254,7 @@ setup(void)
 	cursor[CurNormal] = drw_cur_create(drw, XC_left_ptr);
 	cursor[CurResize] = drw_cur_create(drw, XC_sizing);
 	cursor[CurMove] = drw_cur_create(drw, XC_fleur);
+	cursor[CurSwal] = drw_cur_create(drw, XC_bottom_side);
 	/* init appearance */
 	scheme = ecalloc(LENGTH(colors), sizeof(Clr *));
 	for (i = 0; i < LENGTH(colors); i++)
@@ -2350,9 +2385,9 @@ swal(Client *swer, Client *swee)
 		}
 	}
 
-	/* Detach swee */
 	detach(swee);
 	detachstack(swee);
+	detachstack(swer);
 
 	/* Copy relevant fields into swee. */
 	swee->mon = swer->mon;
@@ -3236,7 +3271,7 @@ main(int argc, char *argv[])
 //        - [ ] retroactive swallow (check swallows when wmname changes; req. for Zathura)
 //        - [ ] persistent swallow (swallow is not consumed)
 //        - [ ] nested swallow
-//        - [ ]: Swallow existing clients by cursor selection (Shift+mod -> move into swallower)
+//        - [x]: Swallow existing clients by cursor selection (Shift+mod -> move into swallower)
 //        - [x]: Designate acive swallowed window by icon 👅
 //        - TEST: What happens if a swallowee gets unmapped/destroyed?
 //        - TEST: Swallow on multiple monitors
