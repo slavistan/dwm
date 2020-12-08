@@ -1696,7 +1696,7 @@ movemouse(const Arg *arg)
 }
 
 /*
- * Move clients through the stack
+ * Move clients through the client list
  */
 void
 moveclient(const Arg *arg) {
@@ -2390,6 +2390,7 @@ swal(Client *swer, Client *swee)
 	detachstack(swer);
 
 	/* Copy relevant fields into swee. */
+	swee->tags = swer->tags;
 	swee->mon = swer->mon;
 	swee->x = swer->x;
 	swee->y = swer->y;
@@ -2412,7 +2413,9 @@ swal(Client *swer, Client *swee)
 	attachstack(swee);
 
 	XUnmapWindow(dpy, swer->win);
+
 	arrange(NULL); /* redraw all monitors */
+	XMoveResizeWindow(dpy, swee->win, swee->x, swee->y, swee->w, swee->h);
 	focus(NULL); // TODO: keep focus unless focused client is swallower
 }
 
@@ -3273,11 +3276,13 @@ main(int argc, char *argv[])
 //        - [ ] nested swallow
 //        - [x]: Swallow existing clients by cursor selection (Shift+mod -> move into swallower)
 //        - [x]: Designate acive swallowed window by icon 👅
+//        - [ ]:
 //        - TEST: What happens if a swallowee gets unmapped/destroyed?
 //        - TEST: Swallow on multiple monitors
 //        - TEST: Run in release mode (no XSYNCHRONIZE)
 //        - TEST: Fullscreen swallows
 //        - TEST: Floating swallows
+//        - TEST: Swallow windows on different tags (and different monitors)
 //        - IDEA: Rename cli to match swal*** names
 
 // Nested swallowing:
