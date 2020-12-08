@@ -1475,10 +1475,10 @@ manage(Window w, XWindowAttributes *wa)
 }
 
 void
-manageswallow(Client *s, Window w)
+manageswallow(Client *swer, Window w)
 {
 	// TODO: Which window attributes may be used without ruining the swallow feature? Border width?
-	Client *c, **pc;
+	Client *swee, **pc;
 	XWindowChanges wc;
 
 	/* Check whether existing client and new window are suitable targets for
@@ -1490,47 +1490,49 @@ manageswallow(Client *s, Window w)
 	 *   - weirdos (InputHint, check updatewmhints())
 	 */
 
-	c = ecalloc(1, sizeof(Client));
-	c->win = w;
-	c->swallowedby = s;
+	setfullscreen(swer, 0);
+
+	swee = ecalloc(1, sizeof(Client));
+	swee->win = w;
+	swee->swallowedby = swer;
 
 	/* Copy relevant fields from swallowing client. */
-	c->mon = s->mon;
-	c->x = c->oldx = s->x;
-	c->y = c->oldy = s->y;
-	c->w = c->oldw = s->w;
-	c->h = c->oldh = s->h;
-	c->isfloating = s->isfloating;
-	c->bw = s->bw;
-	c->oldbw = s->oldbw;
-	c->cfact = s->cfact;
-	c->tags = s->tags;
+	swee->mon = swer->mon;
+	swee->x = swee->oldx = swer->x;
+	swee->y = swee->oldy = swer->y;
+	swee->w = swee->oldw = swer->w;
+	swee->h = swee->oldh = swer->h;
+	swee->isfloating = swer->isfloating;
+	swee->bw = swer->bw;
+	swee->oldbw = swer->oldbw;
+	swee->cfact = swer->cfact;
+	swee->tags = swer->tags;
 
-	updatetitle(c);
+	updatetitle(swee);
 
 	/* Swap in new client into the lists. */
-	for (pc = &s->mon->clients; *pc && *pc != s; pc = &(*pc)->next);
-	*pc = c;
-	c->next = s->next;
-	detachstack(s);
-	attachstack(c);
+	for (pc = &swer->mon->clients; *pc && *pc != swer; pc = &(*pc)->next);
+	*pc = swee;
+	swee->next = swer->next;
+	detachstack(swer);
+	attachstack(swee);
 
 	/* Border config */
-	wc.border_width = c->bw;
+	wc.border_width = swee->bw;
 	XConfigureWindow(dpy, w, CWBorderWidth, &wc);
 	XSetWindowBorder(dpy, w, scheme[SchemeNorm][ColBorder].pixel);
-	configure(c);
-	updatesizehints(c);
+	configure(swee);
+	updatesizehints(swee);
 	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask);
-	grabbuttons(c, 0);
-	if (c->isfloating)
-		XRaiseWindow(dpy, c->win);
+	grabbuttons(swee, 0);
+	if (swee->isfloating)
+		XRaiseWindow(dpy, swee->win);
 	XChangeProperty(dpy, root, netatom[NetClientList], XA_WINDOW, 32, PropModeAppend,
-		(unsigned char *) &(c->win), 1);
-	setclientstate(c, NormalState);
-	if (c->mon == selmon)
+		(unsigned char *) &(swee->win), 1);
+	setclientstate(swee, NormalState);
+	if (swee->mon == selmon)
 		unfocus(selmon->sel, 0);
-	c->mon->sel = c;
+	swee->mon->sel = swee;
 
 	/* Contrasting manage()'s implementation we need to explicitly resize the
 	 * window which in manage()'s implementation is done via its call to
@@ -1539,10 +1541,10 @@ manageswallow(Client *s, Window w)
 	 * As we've copied the configuration of an existing window, arrange() won't
 	 * do anything here. Thus we call XMoveResize() explicitly and omit
 	 * arrange(). */
-	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
+	XMoveResizeWindow(dpy, swee->win, swee->x, swee->y, swee->w, swee->h);
 
-	XMapWindow(dpy, c->win);
-	XUnmapWindow(dpy, s->win);
+	XMapWindow(dpy, swee->win);
+	XUnmapWindow(dpy, swer->win);
 	focus(NULL);
 }
 
@@ -2369,11 +2371,12 @@ spawn(const Arg *arg)
 void
 swal(Client *swer, Client *swee)
 {
-	/* Unsafe; Caller must ensure swallower and swallowee are valid
-	 * participants in a swallow; COMBAK: nestedswallow */
-
 	Client **pc;
 	Swallow *s;
+
+	/* Forbit nested swallowing: COMBAK: nestedswallow */
+	if (!swer || swer->swallowedby || !swee || swee->swallowedby)
+		return;
 
 	/* Remove any registered swallows for the participants.
 	 * COMBAK: nestedswallow */
@@ -2384,6 +2387,13 @@ swal(Client *swer, Client *swee)
 			}
 		}
 	}
+
+	/* Disable fullscreen prior to swallow. Swallows involving fullscreen
+	 * windows may produce quirky artefacts such as fullscreen terminals
+	 * or pseudo-fullscreen windows. */
+	setfullscreen(swer, 0);
+	setfullscreen(swee, 0);
+	XFlush(dpy);
 
 	detach(swee);
 	detachstack(swee);
@@ -3267,23 +3277,22 @@ main(int argc, char *argv[])
 //           - [x] by window (indirect)
 //           - [x] selected client (hotkey)
 //           - [ ] all clients
-//           - [ ] recursive (later)
 //        - [x] swallow (active) clients by window
 //        - [x] enum for types 0 - 3 of wintoclient2
+//        - [x]: Swallow existing clients by cursor selection (Shift+mod -> move into swallower)
+//        - [x]: Designate acive swallowed window by icon 👅
+//        - [x]: Leave fullscreen prior to swallow
+//        - [ ]: Refactor CLI to match swal** naming scheme
 //        - [ ] swallow timeout mechanism
 //        - [ ] retroactive swallow (check swallows when wmname changes; req. for Zathura)
 //        - [ ] persistent swallow (swallow is not consumed)
 //        - [ ] nested swallow
-//        - [x]: Swallow existing clients by cursor selection (Shift+mod -> move into swallower)
-//        - [x]: Designate acive swallowed window by icon 👅
-//        - [ ]:
 //        - TEST: What happens if a swallowee gets unmapped/destroyed?
 //        - TEST: Swallow on multiple monitors
 //        - TEST: Run in release mode (no XSYNCHRONIZE)
 //        - TEST: Fullscreen swallows
 //        - TEST: Floating swallows
 //        - TEST: Swallow windows on different tags (and different monitors)
-//        - IDEA: Rename cli to match swal*** names
 
 // Nested swallowing:
 // - If a swallowee is unmapped/destroyed anywhere in a swallow chain map it as a regular client.
