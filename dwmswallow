@@ -11,12 +11,9 @@ EOF
 }
 
 swallowadd() {
-	[ $# -le 1 ] && { usage >&2; exit 1; }
+	[ $# -eq 0 ] && { usage >&2; exit 1; }
 
 	wid="$1"
-	class=
-	instance=
-	title=
 	ii=2
 	while [ $ii -le $# ]; do
 		eval "arg=\$$ii"
