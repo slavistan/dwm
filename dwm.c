@@ -1840,8 +1840,6 @@ swalmouse(const Arg *arg)
 
 	if (!(swee = selmon->sel))
 		return;
-	if (swee->isfullscreen)
-		return; /* no swallowing of fullscreen windows */
 
 	if (XGrabPointer(dpy, root, False, ButtonPressMask|ButtonReleaseMask, GrabModeAsync,
 		GrabModeAsync, None, cursor[CurSwal]->cursor, CurrentTime) != GrabSuccess)
@@ -1858,11 +1856,20 @@ swalmouse(const Arg *arg)
 		}
 	} while (ev.type != ButtonRelease);
 	XUngrabPointer(dpy, CurrentTime);
-	if (wintoclient2(ev.xbutton.subwindow, &swer) == ClientRegular
-		&& !swer->isfullscreen
-		&& swer != swee)
-		swal(swer, swee);
-	XCheckMaskEvent(dpy, EnterWindowMask, &ev); /* Remove accumulated pending EnterWindow events */
+
+	/* TODO: Check if this switch-case can be removed since
+	 *		 swallowers are never visible and cannot be selected by mouse. */
+	switch (wintoclient2(ev.xbutton.subwindow, &swer)) {
+		case ClientRegular: /* fallthrough */
+		case ClientSwallowee:
+			if (swer != swee) {
+				swal(swer, swee);
+			}
+			break;
+	}
+
+	/* Remove accumulated pending EnterWindow events */
+	XCheckMaskEvent(dpy, EnterWindowMask, &ev);
 }
 
 /*
@@ -2371,15 +2378,12 @@ spawn(const Arg *arg)
 void
 swal(Client *swer, Client *swee)
 {
-	Client **pc;
+	/* 'swer' and 'swee' must be regular or swallowee, but not swallower.  */
+
+	Client *c, **pc;
 	Swallow *s;
 
-	/* Forbit nested swallowing: COMBAK: nestedswallow */
-	if (!swer || swer->swallowedby || !swee || swee->swallowedby)
-		return;
-
-	/* Remove any registered swallows for the participants.
-	 * COMBAK: nestedswallow */
+	/* Remove any queued swallows involving the participants. */
 	if (swallows) {
 		for (s = swallows; s; s = s->next) {
 			if (swee == s->client || swer == s->client) {
@@ -2393,7 +2397,6 @@ swal(Client *swer, Client *swee)
 	 * or pseudo-fullscreen windows. */
 	setfullscreen(swer, 0);
 	setfullscreen(swee, 0);
-	XFlush(dpy);
 
 	detach(swee);
 	detachstack(swee);
@@ -2414,7 +2417,10 @@ swal(Client *swer, Client *swee)
 	swee->bw = swer->bw;
 	swee->oldbw = swer->oldbw;
 	swee->cfact = swer->cfact;
-	swee->swallowedby = swer;
+
+	/* Append swer at the end of swee's swallow chain */
+	for (c = swee; c->swallowedby; c = c->swallowedby);
+	c->swallowedby = swer;
 
 	/* Swap swallowee into stack */
 	for (pc = &swer->mon->clients; *pc && *pc != swer; pc = &(*pc)->next);
@@ -2422,6 +2428,9 @@ swal(Client *swer, Client *swee)
 	swee->next = swer->next;
 	attachstack(swee);
 
+	/* CHECK: Does this generate an UnmapNotify event? If so, we'll run
+	 * into trouble as this will trigger the cleanup procedure for destroyed/unmapped
+	 * swallowers */
 	XUnmapWindow(dpy, swer->win);
 
 	arrange(NULL); /* redraw all monitors */
