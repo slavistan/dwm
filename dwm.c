@@ -238,11 +238,11 @@ static void sighup(int unused);
 static void sigterm(int unused);
 static void spawn(const Arg *arg);
 static void swal(Client *swer, Client *swee);
-static void swaladd(Client *c, const char* class, const char* inst, const char* title);
+static void swalqueue(Client *c, const char* class, const char* inst, const char* title);
 static void swalmouse(const Arg *arg);
-static void swalrm(Swallow *s);
 static void swalstop(Client *c);
 static void swalstopsel(const Arg *arg);
+static void swalunqueue(Swallow *s);
 static void statusclick(const Arg *arg);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
@@ -834,7 +834,7 @@ destroynotify(XEvent *e)
 		if (swallows) {
 			for (s = swallows; s; s = s->next) {
 				if (c == s->client) {
-					swalrm(s);
+					swalunqueue(s);
 					break; /* max. 1 queued swallow per client */
 				}
 			}
@@ -1037,7 +1037,7 @@ fakesignal(void)
 		 * future. */
 		switch (wintoclient2(w, &c)) {
 		case ClientRegular:
-			swaladd(c, segments[2], segments[3], segments[4]);
+			swalqueue(c, segments[2], segments[3], segments[4]);
 			break;
 		}
 	}
@@ -1065,7 +1065,7 @@ fakesignal(void)
 			return 1;
 		}
 
-		swalrm(NULL);
+		swalunqueue(NULL);
 	}
 	else if (!strcmp(segments[0], "swallowstop")) {
 		Client *swee;
@@ -1346,10 +1346,10 @@ killclient(const Arg *arg)
  * 'class', 'inst' and 'title' shall point null-terminated strings or be NULL,
  * implying a wildcard. If 'c' corresponds to an existing swallow, the
  * swallow's filters are updated and no new swallow instance is created.
- * Complement to swalrm().
+ * Complement to swalunqueue().
  */
 void
-swaladd(Client *c, const char *class, const char *inst, const char *title)
+swalqueue(Client *c, const char *class, const char *inst, const char *title)
 {
 	/*
 	 * Unsafe; Caller must ensure that 'c'
@@ -1603,7 +1603,7 @@ maprequest(XEvent *e)
 	}
 	else {
 		manageswallow(s->client, ev->window);
-		swalrm(s);
+		swalunqueue(s);
 	}
 
 }
@@ -1867,11 +1867,11 @@ swalmouse(const Arg *arg)
 
 /*
  * Remove swallow instance from list of swallows and free its resources.
- * Complement to swaladd(). If NULL is passed every swallow is
+ * Complement to swalqueue(). If NULL is passed every swallow is
  * deleted from the list.
  */
 void
-swalrm(Swallow *s)
+swalunqueue(Swallow *s)
 {
 	Swallow *t, **ps;
 
@@ -2383,7 +2383,7 @@ swal(Client *swer, Client *swee)
 	if (swallows) {
 		for (s = swallows; s; s = s->next) {
 			if (swee == s->client || swer == s->client) {
-				swalrm(s);
+				swalunqueue(s);
 			}
 		}
 	}
@@ -2667,7 +2667,7 @@ unmapnotify(XEvent *e) {
 		if (swallows) {
 			for (s = swallows; s; s = s->next) {
 				if (c == s->client) {
-					swalrm(s);
+					swalunqueue(s);
 					break; /* max. 1 queued swallow per client. No need to continue search. */
 				}
 			}
