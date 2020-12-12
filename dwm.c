@@ -3043,7 +3043,7 @@ int
 wintoclient2(Window w, Client **pc)
 {
 	Monitor *m;
-	Client *c;
+	Client *c, *d;
 
 	for (m = mons; m; m = m->next) {
 		for (c = m->clients; c; c = c->next) {
@@ -3057,9 +3057,13 @@ wintoclient2(Window w, Client **pc)
 					return ClientSwallowee;
 				}
 			}
-			else if (c->swallowedby && c->swallowedby->win == w) {
-				*pc = c;
-				return ClientSwallower;
+			else {
+				for (d = c->swallowedby; d; d = d->swallowedby) {
+					if (d->win == w) {
+						*pc = d;
+						return ClientSwallower;
+					}
+				}
 			}
 		}
 	}
