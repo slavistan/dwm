@@ -32,16 +32,7 @@ target_compile_definitions(dwm
 
 install(TARGETS dwm DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 
-###
-### dwmctl
-###
-
-add_executable(dwmctl util.c dwmctl.c)
-
-target_link_libraries(dwmctl
-    X11::X11)
-
-install(TARGETS dwmctl DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+# TODO: Install dwmswallow
 
 ###
 ### CMake options

@@ -3197,18 +3197,13 @@ main(int argc, char *argv[])
 //              3) clients cannot be focused by mouse click into the newly
 //                 exposed area or the wrong client gets focused
 
-// TODO(feat): Remove swallows when client changes to unsuitable state.
-//             While unmap or destroy notifications remove resulting stale
-//             swallows, there's no mechanism to recognize whenever a client
-//             chooses to go "crazy" and drastically changes its configuration,
-//             becoming unsuitable as a swallower. Crazy ought to be clearly
-//             defined first.
-
 // TODO(feat): Cycle layouts keybind and on click onto symbol
 
 // TODO(fix): Add gaps to monocle
 
-// TODO(fix): Make -> CMake
+// TODO: Make -> CMake
+// 		  - [ ] Remove makefile
+// 		  - [ ] Install dwmswallow via cmake
 
 // TODO(fix): man pages
 
@@ -3232,10 +3227,10 @@ main(int argc, char *argv[])
 //           - [ ] all clients
 //        - [x] swallow (active) clients by window
 //        - [x] enum for types 0 - 3 of wintoclient2
-//        - [x]: Swallow existing clients by cursor selection (Shift+mod -> move into swallower)
-//        - [x]: Designate acive swallowed window by icon 👅
-//        - [x]: Leave fullscreen prior to swallow
-//        - [x]: Refactor CLI to match swal** naming scheme
+//        - [x] Swallow existing clients by cursor selection (Shift+mod -> move into swallower)
+//        - [x] Designate acive swallowed window by icon 👅
+//        - [x] Leave fullscreen prior to swallow
+//        - [x] Refactor CLI to match swal** naming scheme
 //        - [x] retroactive swallow (check swallows when wmname changes; req. for Zathura)
 //        - [x] nested swallow
 //        - TEST: What happens if a swallowee gets unmapped/destroyed?
