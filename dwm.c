@@ -266,7 +266,7 @@ static void updatewindowtype(Client *c);
 static void updatewmhints(Client *c);
 static void view(const Arg *arg);
 static Client *wintoclient(Window w);
-static int wintoclient2(Window w, Client **pc);
+static int wintoclient2(Window w, Client **pc, Client **proot);
 static Swallow *wintoswallow(Window w);
 static Monitor *wintomon(Window w);
 static int xerror(Display *dpy, XErrorEvent *ee);
@@ -818,18 +818,30 @@ createmon(void)
 void
 destroynotify(XEvent *e)
 {
-	Client *c;
+	Client *c, *prev, *root;
 	Swallow *s;
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
 
-	switch (wintoclient2(ev->window, &c)) {
+	switch (wintoclient2(ev->window, &c, &root)) {
 	case ClientRegular: /* fallthrough */
 	case ClientSwallowee:
 		unmanage(c, 1);
 		break;
 	case ClientSwallower:
-		free(c->swallowedby);
-		c->swallowedby = NULL;
+		for (prev = root; prev->swallowedby != c; prev = prev->swallowedby);
+		prev->swallowedby = NULL;
+
+		if (c->swallowedby) {
+			c->swallowedby->mon = root->mon;
+			c->swallowedby->next = root->next;
+			root->next = c->swallowedby;
+			attachstack(c->swallowedby);
+			focus(NULL);
+			arrange(c->swallowedby->mon);
+			XMapWindow(dpy, c->swallowedby->win);
+		}
+
+		free(c);
 		updateclientlist();
 		break;
 	}
@@ -1019,7 +1031,8 @@ fakesignal(void)
 		/* Only regular clients, i.e. clients not involved in a swallow are
 		 * allowed to swallow. Nested swallowing will be implemented in the
 		 * future. */
-		switch (wintoclient2(w, &c)) {
+		/* COMBAK: nestedswallow */
+		switch (wintoclient2(w, &c, NULL)) {
 		case ClientRegular:
 			swalqueue(c, segments[2], segments[3], segments[4]);
 			break;
@@ -1036,8 +1049,8 @@ fakesignal(void)
 
 		winswer = strtoul(segments[1], NULL, 0);
 		winswee = strtoul(segments[2], NULL, 0);
-		if (wintoclient2(winswer, &swer) != ClientRegular
-			|| wintoclient2(winswee, &swee) != ClientRegular) {
+		if (wintoclient2(winswer, &swer, NULL) != ClientRegular
+			|| wintoclient2(winswee, &swee, NULL) != ClientRegular) {
 			return 1;
 		}
 
@@ -1061,7 +1074,7 @@ fakesignal(void)
 		}
 
 		winswee = strtoul(segments[1], NULL, 0);
-		if (wintoclient2(winswee, &swee) != ClientSwallowee) {
+		if (wintoclient2(winswee, &swee, NULL) != ClientSwallowee) {
 			return 1;
 		}
 
@@ -1562,7 +1575,7 @@ maprequest(XEvent *e)
 	if (wa.override_redirect)
 		return;
 
-	switch (wintoclient2(ev->window, &c)) {
+	switch (wintoclient2(ev->window, &c, NULL)) {
 	case ClientSwallower: /* swallower asks to be remapped */
 		/* TODO: Maybe reload hints from window here? */
 		c->swallowedby->mon = c->mon;
@@ -1843,7 +1856,7 @@ swalmouse(const Arg *arg)
 
 	/* TODO: Check if this switch-case can be removed since
 	 *		 swallowers are never visible and cannot be selected by mouse. */
-	switch (wintoclient2(ev.xbutton.subwindow, &swer)) {
+	switch (wintoclient2(ev.xbutton.subwindow, &swer, NULL)) {
 		case ClientRegular: /* fallthrough */
 		case ClientSwallowee:
 			if (swer != swee) {
@@ -2630,20 +2643,14 @@ unmanage(Client *c, int destroyed)
 
 
 void
-unmapnotify(XEvent *e) {
-	/*
-	 * UnmapNotify gets triggered multiple times per closing window. Once for the
-	 * window itself, and once again due to it being a child of the root window.
-	 * as the WM is listening for SubstructureNotify events, which include
-	 * events of any of the root's children, right?
-	 */
+unmapnotify(XEvent *e)
+{
 
 	Client *c;
 	XUnmapEvent *ev = &e->xunmap;
 	Swallow *s;
 
 	if ((c = wintoclient(ev->window))) {
-
 		if (ev->send_event) {
 			/* ICCCM 4.1.4:  When changing the state of the window to
 			 * Withdrawn, the client must (in addition to unmapping the window)
@@ -2999,7 +3006,7 @@ wintoclient(Window w)
 }
 
 int
-wintoclient2(Window w, Client **pc)
+wintoclient2(Window w, Client **pc, Client **proot)
 {
 	Monitor *m;
 	Client *c, *d;
@@ -3019,6 +3026,8 @@ wintoclient2(Window w, Client **pc)
 			else {
 				for (d = c->swallowedby; d; d = d->swallowedby) {
 					if (d->win == w) {
+						if (proot) /* set root client of swallow chain */
+							*proot = c;
 						*pc = d;
 						return ClientSwallower;
 					}
