@@ -718,6 +718,8 @@ configurenotify(XEvent *e)
 void
 configurerequest(XEvent *e)
 {
+	// TODO(nestedswallow): Does configurerequest need to be intercepted?
+
 	/* XPM 2.2.1: A window's configuration consists of its position, extent,
 	 * border width and stacking order. These window parameters are special
 	 * in that they are configured in cooperation with the window manager. */
@@ -833,6 +835,7 @@ destroynotify(XEvent *e)
 
 		if (c->swallowedby) {
 			c->swallowedby->mon = root->mon;
+			c->swallowedby->tags = root->tags;
 			c->swallowedby->next = root->next;
 			root->next = c->swallowedby;
 			attachstack(c->swallowedby);
@@ -1475,20 +1478,13 @@ manage(Window w, XWindowAttributes *wa)
 void
 manageswallow(Client *swer, Window w)
 {
-	// TODO(swallow): Rework this function
-	// TODO: Which window attributes may be used without ruining the swallow feature? Border width?
 	Client *swee, **pc;
 	XWindowChanges wc;
 
-	/* Check whether existing client and new window are suitable targets for
-	 * swallowing. Remove anything non-trivial, namely
-	 *   - fullscreen swallowers
-	 *   - fullscreen swallowees (see updatewindowtype())
-	 *   - fixed-size swallowees
-	 *   - transient windows (swers and swees)
-	 *   - weirdos (InputHint, check updatewmhints())
-	 */
-
+	/* Swallowing of and by fullscreen clients produces peculiar
+	 * artefacts such as fullscreen terminals and pseudo-fullscreen
+	 * application windows. We avoid that altogether by exiting
+	 * fullscreen mode. */
 	setfullscreen(swer, 0);
 
 	swee = ecalloc(1, sizeof(Client));
@@ -2445,11 +2441,7 @@ swal(Client *swer, Client *swee)
 	swee->next = swer->next;
 	attachstack(swee);
 
-	/* CHECK: Does this generate an UnmapNotify event? If so, we'll run
-	 * into trouble as this will trigger the cleanup procedure for destroyed/unmapped
-	 * swallowers */
 	XUnmapWindow(dpy, swer->win);
-
 	arrange(NULL); /* redraw all monitors */
 	XMoveResizeWindow(dpy, swee->win, swee->x, swee->y, swee->w, swee->h);
 	focus(NULL); // TODO: keep focus unless focused client is swallower
@@ -2612,6 +2604,8 @@ unmanage(Client *c, int destroyed)
 
 	if ((swer = c->swallowedby)) {
 		swer->mon = c->mon;
+		swer->tags = c->tags;
+		swer->cfact = c->cfact;
 		swer->next = c->next;
 		c->next = swer;
 		attachstack(swer);
@@ -2750,23 +2744,17 @@ updateclientlist()
 	 * spec: _NET_CLIENT_LIST has initial mapping order, starting with the
 	 * oldest window. _NET_CLIENT_LIST_STACKING has bottom-to-top stacking
 	 * order. */
-	Client *c;
+	Client *c, *d;
 	Monitor *m;
 
 	XDeleteProperty(dpy, root, netatom[NetClientList]);
 	for (m = mons; m; m = m->next) {
 		for (c = m->clients; c; c = c->next) {
-			XChangeProperty(dpy, root, netatom[NetClientList],
-				XA_WINDOW, 32, PropModeAppend,
-				(unsigned char *) &(c->win), 1);
-
-			/* Include any swallowing windows, as we are managing the window. */
-			if (c->swallowedby) {
+			for (d = c; d; d = d->swallowedby) {
 				XChangeProperty(dpy, root, netatom[NetClientList],
 					XA_WINDOW, 32, PropModeAppend,
-					(unsigned char *) &(c->swallowedby->win), 1);
+					(unsigned char *) &(c->win), 1);
 			}
-			// TODO(nestedswallow): walk full swallow list
 		}
 	}
 }
@@ -3278,6 +3266,7 @@ main(int argc, char *argv[])
 //        - TEST: Fullscreen swallows
 //        - TEST: Floating swallows
 //        - TEST: Swallow windows on different tags (and different monitors)
+//        - TEST: Should window extend of remapped swallowers be pruned?
 
 // Nested swallowing:
 // - If a swallowee is unmapped/destroyed anywhere in a swallow chain map it as a regular client.
