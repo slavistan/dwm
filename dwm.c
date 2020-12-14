@@ -718,8 +718,6 @@ configurenotify(XEvent *e)
 void
 configurerequest(XEvent *e)
 {
-	// TODO(nestedswallow): Does configurerequest need to be intercepted?
-
 	/* XPM 2.2.1: A window's configuration consists of its position, extent,
 	 * border width and stacking order. These window parameters are special
 	 * in that they are configured in cooperation with the window manager. */
@@ -1022,7 +1020,7 @@ fakesignal(void)
 	numsegments = split(rootname + sizeof(prefix) - 1, sep, segments, sizeof(segments));
 	numargs = numsegments - 1; /* number of parameters to the "command" */
 
-	if (!strcmp(segments[0], "swallowadd")) {
+	if (!strcmp(segments[0], "swallowqueue")) {
 		Window w;
 		Client *c;
 
@@ -1035,14 +1033,14 @@ fakesignal(void)
 		/* Only regular clients, i.e. clients not involved in a swallow are
 		 * allowed to swallow. Nested swallowing will be implemented in the
 		 * future. */
-		/* COMBAK: nestedswallow */
 		switch (wintoclient2(w, &c, NULL)) {
-		case ClientRegular:
+		case ClientRegular: /* fallthrough */
+		case ClientSwallowee:
 			swalqueue(c, segments[2], segments[3], segments[4]);
 			break;
 		}
 	}
-	else if (!strcmp(segments[0], "swallowdo")) {
+	else if (!strcmp(segments[0], "swallow")) {
 		Client *swer, *swee;
 		Window winswer, winswee;
 
@@ -1053,36 +1051,11 @@ fakesignal(void)
 
 		winswer = strtoul(segments[1], NULL, 0);
 		winswee = strtoul(segments[2], NULL, 0);
-		if (wintoclient2(winswer, &swer, NULL) != ClientRegular
-			|| wintoclient2(winswee, &swee, NULL) != ClientRegular) {
-			return 1;
+		if (wintoclient2(winswer, &swer, NULL) != ClientSwallower
+			&& wintoclient2(winswee, &swee, NULL) != ClientSwallower) {
+			swal(swer, swee);
 		}
-
-		swal(swer, swee);
-	}
-	else if (!strcmp(segments[0], "swallowrm")) {
-		/* Params: None */
-		if (numargs > 0) {
-			return 1;
-		}
-
-		swalunqueue(NULL);
-	}
-	else if (!strcmp(segments[0], "swallowstop")) {
-		Client *swee;
-		Window winswee;
-
-		/* Params: swallowee window */
-		if (numargs == 0) {
-			return 1;
-		}
-
-		winswee = strtoul(segments[1], NULL, 0);
-		if (wintoclient2(winswee, &swee, NULL) != ClientSwallowee) {
-			return 1;
-		}
-
-		swalstop(swee);
+		return 1;
 	}
 
 	return 1;
@@ -1478,6 +1451,7 @@ manage(Window w, XWindowAttributes *wa)
 void
 manageswallow(Client *swer, Window w)
 {
+	/* swer can be regular client or swallowee */
 	Client *swee, **pc;
 	XWindowChanges wc;
 
@@ -2455,6 +2429,8 @@ swalstopsel(const Arg *arg)
 {
 	if (selmon->sel && selmon->sel->swallowedby)
 		swalstop(selmon->sel);
+
+	// TODO: Add arg to remove all active and queued swallows
 }
 
 void
@@ -2663,24 +2639,21 @@ unmapnotify(XEvent *e)
 
 /*
  * Stop an active swallow. Unswallows a swallowee, re-maps the swallower and
- * attaches it behind the swallowee. Returns pointer to swallower.
+ * attaches it behind the swallowee.
  */
 void
 swalstop(Client *swee)
 {
-	/* COMBAK: nestedswallow */
-
 	Client *swer;
 
-	if (!swee || !swee->swallowedby)
+	if (!swee || !(swer = swee->swallowedby))
 		return;
 
-	swer = swee->swallowedby;
 	swee->swallowedby = NULL;
 
-	/* TODO: Maybe reload hints from window here? */
 	/* Set fields */
 	swer->mon = swee->mon;
+	swer->tags = swee->tags;
 
 	/* Attach */
 	swer->next = swee->next;

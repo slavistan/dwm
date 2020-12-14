@@ -2,98 +2,55 @@
 
 usage() {
 	cat <<EOF
-Usage: $0 SWALLOWER [-c CLASS] [-i INSTANCE] [-t TITLE]
+DWM swallow command-line interface. Usage:
 
-Queue window SWALLOWER to swallow the next mapped window whose attributes match
-the CLASS name, INSTANCE name and window TITLE filters. An empty filters will
-match everything.
+  $(printf "\033[1m")dwmswallow $(printf "\033[3m")SWALLOWER SWALLOWEE$(printf "\033[0m")
+    Perform immediate swallow of window $(printf "\033[3m")SWALLOWEE$(printf "\033[0m") by window $(printf "\033[3m")SWALLOWER$(printf "\033[0m").
+
+  $(printf "\033[1m")dwmswallow $(printf "\033[3m")SWALLOWER [-c CLASS] [-i INSTANCE] [-t TITLE]$(printf "\033[0m")
+    Queue window $(printf "\033[3m")SWALLOWER$(printf "\033[0m") to swallow the next mapped window whose attributes
+    match the $(printf "\033[3m")CLASS$(printf "\033[0m") name, $(printf "\033[3m")INSTANCE$(printf "\033[0m") name and window $(printf "\033[3m")TITLE$(printf "\033[0m") filters. Omitted
+    filters match everything.
+
+  $(printf "\033[1m")dwmswallow -h$(printf "\033[0m")
+  $(printf "\033[1m")dwmswallow --help$(printf "\033[0m")
+    Show this usage information.
 EOF
-}
-
-swallowadd() {
-	[ $# -eq 0 ] && { usage >&2; exit 1; }
-
-	wid="$1"
-	ii=2
-	while [ $ii -le $# ]; do
-		eval "arg=\$$ii"
-		eval "val=\$$((ii + 1))"
-		case "$arg" in
-		-c)
-			class="$val"
-			;;
-		-i)
-			instance="$val"
-			;;
-		-t)
-			title="$val"
-			;;
-		*)
-			usage >&2
-			exit 1
-			;;
-		esac
-		ii=$((ii + 2))
-	done
-
-	name="$(printf "${PREFIX}swallowadd${SEP}%u${SEP}%s${SEP}%s${SEP}%s" "$wid" "$class" "$instance" "$title")"
-echo "Setting xrootname to:\n\t'$name'\n"
-	xsetroot -name "$name"
-}
-
-swallowdo() {
-	[ ! $# -eq 2 ] && { usage >&2; exit 1; }
-
-	widswer="$1"
-	widswee="$2"
-
-	name="$(printf "${PREFIX}swallowdo${SEP}%u${SEP}%u" "$widswer" "$widswee")"
-echo "Setting xrootname to:\n\t'$name'\n"
-	xsetroot -name "$name"
-}
-
-swallowstop() {
-	[ ! $# -eq 1 ] && { usage >&2; exit 1; }
-
-	widswee="$1"
-
-	name="$(printf "${PREFIX}swallowstop${SEP}%u" "$widswee")"
-echo "Setting xrootname to:\n\t'$name'\n"
-	xsetroot -name "$name"
-}
-
-swallowrm() {
-	[ ! $# -eq 0 ] && { usage >&2; exit 1; }
-	name="$(printf "${PREFIX}swallowrm")"
-echo "Setting xrootname to:\n\t'$name'\n"
-	xsetroot -name "$name"
 }
 
 SEP='###' # As defined in dwm.c:fakesignal()
 PREFIX='#!'
 
-case "$1" in
--h|--help)
+if [ $# -eq 1 ] && [ "$1" = "-h" ]; then
 	usage
-	;;
-add)
-	shift
-	swallowadd "$@"
-	;;
-do)
-	shift
-	swallowdo "$@"
-	;;
-stop)
-	shift
-	swallowstop "$@"
-	;;
-rm)
-	shift
-	swallowrm "$@"
-	;;
-*)
-	usage >&2
-	exit 1
-	;;
-esac
+elif [ $# -eq 2 ]; then
+	widswer="$1"
+	widswee="$2"
+	if name="$(printf "${PREFIX}swallow${SEP}%u${SEP}%u" "$widswer" "$widswee")"; then
+		xsetroot -name "$name"
+	else
+		usage >&2
+		exit 1
+	fi
+else
+	widswer="$1"
+	ii=2
+	while [ $ii -le $# ]; do
+		eval "arg=\$$ii"
+		eval "val=\$$((ii + 1))"
+		case "$arg" in
+		-c) class="$val" ;;
+		-i) instance="$val" ;;
+		-t) title="$val" ;;
+		*) usage >&2; exit 1 ;;
+		esac
+		ii=$((ii + 2))
+	done
+
+	if name="$(printf "${PREFIX}swallowqueue${SEP}%u${SEP}%s${SEP}%s${SEP}%s" "$widswer" "$class" "$instance" "$title")"; then
+		xsetroot -name "$name"
+	else
+		usage >&2
+		exit 1
+	fi
+fi
