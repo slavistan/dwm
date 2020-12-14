@@ -253,7 +253,6 @@ static void toggletag(const Arg *arg);
 static void toggleview(const Arg *arg);
 static void unfocus(Client *c, int setfocus);
 static void unmanage(Client *c, int destroyed);
-static void unmanageswallow(Client *c, int destroyed);
 static void unmapnotify(XEvent *e);
 static void updatebarpos(Monitor *m);
 static void updatebars(void);
@@ -824,24 +823,9 @@ destroynotify(XEvent *e)
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
 
 	switch (wintoclient2(ev->window, &c)) {
-	default: /* no client */
-		break;
-	case ClientRegular:
-		unmanage(c, 1);
-		/* Remove queued swallow if client is destroyed. Note that regular
-		 * clients are the only type of client allowed to register for a
-		 * swallow. Thus we don't need to check the other cases. */
-		if (swallows) {
-			for (s = swallows; s; s = s->next) {
-				if (c == s->client) {
-					swalunqueue(s);
-					break; /* max. 1 queued swallow per client */
-				}
-			}
-		}
-		break;
+	case ClientRegular: /* fallthrough */
 	case ClientSwallowee:
-		unmanageswallow(c, 1);
+		unmanage(c, 1);
 		break;
 	case ClientSwallower:
 		free(c->swallowedby);
@@ -1896,6 +1880,22 @@ swalunqueue(Swallow *s)
 	}
 }
 
+/*
+ * Removes swallow queued for a specific client.
+ */
+void
+swalunqueuebyclient(Client *c)
+{
+	Swallow *s;
+
+	for (s = swallows; s; s = s->next) {
+		if (c == s->client) {
+			swalunqueue(s);
+			break; /* max. 1 queued swallow per client */
+		}
+	}
+}
+
 void
 resize(Client *c, int x, int y, int w, int h, int interact)
 {
@@ -2589,8 +2589,19 @@ unfocus(Client *c, int setfocus)
 void
 unmanage(Client *c, int destroyed)
 {
+	Client *swer;
 	XWindowChanges wc;
 	Monitor *m = c->mon;
+
+	if ((swer = c->swallowedby)) {
+		swer->mon = c->mon;
+		swer->next = c->next;
+		c->next = swer;
+		attachstack(swer);
+		resizeclient(swer, c->x, c->y, c->w, c->h);
+		XMapWindow(dpy, swer->win);
+	}
+	swalunqueuebyclient(c);
 
 	/* Remove client from lists */
 	detach(c);
@@ -2617,45 +2628,6 @@ unmanage(Client *c, int destroyed)
 
 }
 
-void
-unmanageswallow(Client *c, int destroyed)
-{
-	Window w;
-	XWindowChanges wc;
-
-	/* Swap in the other window */
-	w = c->win;
-	c->win = c->swallowedby->win;
-	updatetitle(c);
-
-	/* Border config */
-	wc.border_width = c->bw;
-	XConfigureWindow(dpy, c->w, CWBorderWidth, &wc);
-	XSetWindowBorder(dpy, c->w, scheme[SchemeNorm][ColBorder].pixel);
-	configure(c);
-	updatesizehints(c);
-
-	if (!destroyed) {
-		wc.border_width = c->oldbw;
-		XGrabServer(dpy); /* avoid race conditions */
-		XSetErrorHandler(xerrordummy);
-
-		// Why restore the border? And why not use XSetWindowBorderWidth() directly?
-		XConfigureWindow(dpy, w, CWBorderWidth, &wc); /* restore border */
-		XUngrabButton(dpy, AnyButton, AnyModifier, w);
-		setclientstate(c->swallowedby, WithdrawnState);
-		XSync(dpy, False);
-		XSetErrorHandler(xerror);
-		XUngrabServer(dpy);
-	}
-
-	free(c->swallowedby);
-	c->swallowedby = NULL;
-	focus(NULL);
-	updateclientlist();
-	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
-	XMapWindow(dpy, c->win);
-}
 
 void
 unmapnotify(XEvent *e) {
@@ -2672,16 +2644,6 @@ unmapnotify(XEvent *e) {
 
 	if ((c = wintoclient(ev->window))) {
 
-		/* Remove queued swallow if client is unmapped */
-		if (swallows) {
-			for (s = swallows; s; s = s->next) {
-				if (c == s->client) {
-					swalunqueue(s);
-					break; /* max. 1 queued swallow per client. No need to continue search. */
-				}
-			}
-		}
-
 		if (ev->send_event) {
 			/* ICCCM 4.1.4:  When changing the state of the window to
 			 * Withdrawn, the client must (in addition to unmapping the window)
@@ -2689,12 +2651,8 @@ unmapnotify(XEvent *e) {
 			 * request. */
 			setclientstate(c, WithdrawnState);
 		}
-		else if (!c->swallowedby) {
+		else
 			unmanage(c, 0);
-		}
-		else {
-			unmanageswallow(c, 0);
-		}
 	}
 }
 
@@ -2797,6 +2755,7 @@ updateclientlist()
 					XA_WINDOW, 32, PropModeAppend,
 					(unsigned char *) &(c->swallowedby->win), 1);
 			}
+			// TODO(nestedswallow): walk full swallow list
 		}
 	}
 }
@@ -3309,3 +3268,8 @@ main(int argc, char *argv[])
 
 // Nested swallowing:
 // - If a swallowee is unmapped/destroyed anywhere in a swallow chain map it as a regular client.
+// 
+
+// Questions:
+//  - Killing a client always produces multiple unmap and destroy notifications. Why?
+//  - Killing a client causes an unmap before a destroy. Why?
