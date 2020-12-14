@@ -819,7 +819,6 @@ void
 destroynotify(XEvent *e)
 {
 	Client *c, *prev, *root;
-	Swallow *s;
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
 
 	switch (wintoclient2(ev->window, &c, &root)) {
@@ -1557,6 +1556,9 @@ maprequest(XEvent *e)
 		prev->swallowedby = NULL;
 
 		c->mon = root->mon;
+		c->tags = root->tags;
+		c->isfloating = 0;
+
 		c->next = root->next;
 		root->next = c;
 		attachstack(c);
@@ -1740,6 +1742,7 @@ void
 propertynotify(XEvent *e)
 {
 	Client *c;
+	Swallow *s;
 	Window trans;
 	XPropertyEvent *ev = &e->xproperty;
 
@@ -1776,6 +1779,10 @@ propertynotify(XEvent *e)
 			updatetitle(c); // TODO: As title now contains the classname this no longer makes sense.
 			if (c == c->mon->sel)
 				drawbar(c->mon);
+
+			if (swalretroactive && (s = wintoswallow(c->win))) {
+				swal(s->client, c);
+			}
 		}
 		if (ev->atom == netatom[NetWMWindowType])
 			updatewindowtype(c);
@@ -2583,6 +2590,7 @@ unmanage(Client *c, int destroyed)
 		swer->tags = c->tags;
 		swer->cfact = c->cfact;
 		swer->next = c->next;
+		swer->isfloating = c->isfloating;
 		c->next = swer;
 		attachstack(swer);
 		resizeclient(swer, c->x, c->y, c->w, c->h);
@@ -2622,7 +2630,6 @@ unmapnotify(XEvent *e)
 
 	Client *c;
 	XUnmapEvent *ev = &e->xunmap;
-	Swallow *s;
 
 	if ((c = wintoclient(ev->window))) {
 		if (ev->send_event) {
@@ -3228,11 +3235,9 @@ main(int argc, char *argv[])
 //        - [x]: Swallow existing clients by cursor selection (Shift+mod -> move into swallower)
 //        - [x]: Designate acive swallowed window by icon 👅
 //        - [x]: Leave fullscreen prior to swallow
-//        - [ ]: Refactor CLI to match swal** naming scheme
-//        - [ ] swallow timeout mechanism
-//        - [ ] retroactive swallow (check swallows when wmname changes; req. for Zathura)
-//        - [ ] persistent swallow (swallow is not consumed)
-//        - [ ] nested swallow
+//        - [x]: Refactor CLI to match swal** naming scheme
+//        - [x] retroactive swallow (check swallows when wmname changes; req. for Zathura)
+//        - [x] nested swallow
 //        - TEST: What happens if a swallowee gets unmapped/destroyed?
 //        - TEST: Swallow on multiple monitors
 //        - TEST: Run in release mode (no XSYNCHRONIZE)
@@ -3240,10 +3245,6 @@ main(int argc, char *argv[])
 //        - TEST: Floating swallows
 //        - TEST: Swallow windows on different tags (and different monitors)
 //        - TEST: Should window extend of remapped swallowers be pruned?
-
-// Nested swallowing:
-// - If a swallowee is unmapped/destroyed anywhere in a swallow chain map it as a regular client.
-// 
 
 // Questions:
 //  - Killing a client always produces multiple unmap and destroy notifications. Why?
