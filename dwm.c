@@ -839,6 +839,7 @@ destroynotify(XEvent *e)
 			focus(NULL);
 			arrange(c->swallowedby->mon);
 			XMapWindow(dpy, c->swallowedby->win);
+			setclientstate(c->swallowedby, NormalState);
 		}
 
 		free(c);
@@ -1474,6 +1475,7 @@ manage(Window w, XWindowAttributes *wa)
 void
 manageswallow(Client *swer, Window w)
 {
+	// TODO(swallow): Rework this function
 	// TODO: Which window attributes may be used without ruining the swallow feature? Border width?
 	Client *swee, **pc;
 	XWindowChanges wc;
@@ -1562,7 +1564,7 @@ mappingnotify(XEvent *e)
 void
 maprequest(XEvent *e)
 {
-	Client *c;
+	Client *c, *prev, *root;
 	static XWindowAttributes wa;
 	XMapRequestEvent *ev = &e->xmaprequest;
 	Swallow *s;
@@ -1575,23 +1577,25 @@ maprequest(XEvent *e)
 	if (wa.override_redirect)
 		return;
 
-	switch (wintoclient2(ev->window, &c, NULL)) {
-	case ClientSwallower: /* swallower asks to be remapped */
-		/* TODO: Maybe reload hints from window here? */
-		c->swallowedby->mon = c->mon;
-		c->swallowedby->next = c->next;
-		c->next = c->swallowedby;
-		attachstack(c->swallowedby);
-		arrange(c->mon);
-		XMapWindow(dpy, c->swallowedby->win);
-		setclientstate(c->swallowedby, NormalState);
-		focus(NULL);
-		c->swallowedby = NULL;
-	case ClientRegular: /* regular client; fallthrough */
-	case ClientSwallowee: /* swallowee; fallthrough */
+	switch (wintoclient2(ev->window, &c, &root)) {
+	case ClientRegular: /* fallthrough */
+	case ClientSwallowee:
+		/* should never happen; regulars and swallowees are always mapped. */
 		return;
-	default:
-		break; /* No managed client */
+	case ClientSwallower:
+		for (prev = root; prev->swallowedby != c; prev = prev->swallowedby);
+		prev->swallowedby = NULL;
+
+		c->mon = root->mon;
+		c->next = root->next;
+		root->next = c;
+		attachstack(c);
+		focus(NULL);
+		arrange(c->mon);
+		XMapWindow(dpy, c->win);
+		setclientstate(c, NormalState);
+		focus(NULL);
+		return;
 	}
 
 	/* No client manages the new window. See if any swallow matches. */
