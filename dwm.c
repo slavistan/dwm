@@ -3240,6 +3240,17 @@ main(int argc, char *argv[])
 //        - TEST: Floating swallows
 //        - TEST: Swallow windows on different tags (and different monitors)
 //        - TEST: Should window extend of remapped swallowers be pruned?
+//
+// BUGS: Swallow
+// - [ ] Focus after stopped swallow shall be on swallowee; Seems random.
+//    (differs between master and slave windows)
+// - [ ] Stopped swallows for master clients created from queue (manageswallow)
+//    produce two windows with a highlighted border.
+//    Steps to reproduce:
+//     - Create terminal on empty tag
+//     - dwmswallow $WINDOWID; zathura
+//     - Ctrl-u (stop swap)
+//
 
 // Questions:
 //  - Killing a client always produces multiple unmap and destroy notifications. Why?

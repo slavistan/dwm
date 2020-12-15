@@ -21,7 +21,7 @@ EOF
 SEP='###' # As defined in dwm.c:fakesignal()
 PREFIX='#!'
 
-if [ $# -eq 1 ] && [ "$1" = "-h" ]; then
+if [ $# -eq 0 ] || [ "$1" = "-h" ]; then
 	usage
 elif [ $# -eq 2 ]; then
 	widswer="$1"
