@@ -202,7 +202,7 @@ static void incnmaster(const Arg *arg);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
 static void manage(Window w, XWindowAttributes *wa);
-static void manageswallow(Client *c, Window w);
+static void manageswallow(Client *c, Window w, XWindowAttributes *wa);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
 static void monocle(Monitor *m);
@@ -237,7 +237,7 @@ static void sigchld(int unused);
 static void sighup(int unused);
 static void sigterm(int unused);
 static void spawn(const Arg *arg);
-static void swal(Client *swer, Client *swee);
+static void swal(Client *swer, Client *swee, int manage);
 static void swalqueue(Client *c, const char* class, const char* inst, const char* title);
 static void swalmouse(const Arg *arg);
 static void swalstop(Client *c);
@@ -1052,7 +1052,7 @@ fakesignal(void)
 		winswee = strtoul(segments[2], NULL, 0);
 		if (wintoclient2(winswer, &swer, NULL) != ClientSwallower
 			&& wintoclient2(winswee, &swee, NULL) != ClientSwallower) {
-			swal(swer, swee);
+			swal(swer, swee, 0);
 		}
 		return 1;
 	}
@@ -1450,69 +1450,35 @@ manage(Window w, XWindowAttributes *wa)
 }
 
 void
-manageswallow(Client *swer, Window w)
+manageswallow(Client *swer, Window w, XWindowAttributes *wa)
 {
 	/* 'swer' and 'swee' must be regular or swallowee, but not swallower. */
 
 	Client *swee, **pc;
 	XWindowChanges wc;
 
-	/* Initialize swallowee. */
+	/* Perform bare minimum setup of a client for window 'w' such that swal()
+	 * may be used to perform the swallow. The following lines are basically a
+	 * minimal implementation of manage() with a few chunks delegated to
+	 * swal(). */
 	swee = ecalloc(1, sizeof(Client));
 	swee->win = w;
-	swee->swallowedby = swer;
-	swee->bw = swer->bw;
-	swee->oldbw = swer->oldbw;
+	swee->mon = swer->mon;
+	swee->oldbw = wa->border_width;
+	swee->bw = borderpx;
+	attach(swee);
+	attachstack(swee);
 	updatetitle(swee);
-	wc.border_width = swee->bw;
-	XConfigureWindow(dpy, w, CWBorderWidth, &wc);
-	XSetWindowBorder(dpy, w, scheme[SchemeNorm][ColBorder].pixel);
 	updatesizehints(swee);
-	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask);
+	XSelectInput(dpy, swee->win, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask);
+	wc.border_width = swee->bw;
+	XConfigureWindow(dpy, swee->win, CWBorderWidth, &wc);
+	XSetWindowBorder(dpy, swee->win, scheme[SchemeNorm][ColBorder].pixel);
 	grabbuttons(swee, 0);
-
-	/* Add swee to EMWH's _NET_CLIENT_LIST. */
 	XChangeProperty(dpy, root, netatom[NetClientList], XA_WINDOW, 32, PropModeAppend,
 		(unsigned char *) &(swee->win), 1);
 
-	/* Disable fullscreen prior to swallow. Swallows involving fullscreen
-	 * windows produces quirky artefacts such as fullscreen terminals or tiled
-	 * pseudo-fullscreen windows. */
-	setfullscreen(swer, 0);
-
-	/* Copy swer's geometry. If you're using patches which modify window
-	 * geometry add to the code below. */
-	swee->mon = swer->mon;
-	swee->tags = swer->tags;
-	swee->x = swee->oldx = swer->x;
-	swee->y = swee->oldy = swer->y;
-	swee->w = swee->oldw = swer->w;
-	swee->h = swee->oldh = swer->h;
-	swee->isfloating = swer->isfloating;
-	swee->cfact = swer->cfact;
-	configure(swee);
-
-	/* Swap swallowee into client and focus lists. Keeps current focus. */
-	for (pc = &swer->mon->clients; *pc && *pc != swer; pc = &(*pc)->next);
-	*pc = swee;
-	swee->next = swer->next;
-	for (pc = &swer->mon->stack; *pc && *pc != swer; pc = &(*pc)->snext);
-	*pc = swee;
-	swee->snext = swer->snext;
-
-	/* ICCCM 4.1.3.1 */
-	setclientstate(swee, NormalState);
-
-	/* Move/resize swee and raise the window if it's floating or it may be
-	 * covered up. */
-	XMoveResizeWindow(dpy, swee->win, swee->x, swee->y, swee->w, swee->h);
-	if (swee->isfloating)
-		XRaiseWindow(dpy, swee->win);
-
-	XUnmapWindow(dpy, swer->win);
-	arrange(swee->mon);
-	XMapWindow(dpy, swee->win);
-	focus(NULL);
+	swal(swer, swee, 1);
 }
 
 void
@@ -1570,13 +1536,10 @@ maprequest(XEvent *e)
 	}
 
 	/* No client manages the new window. See if any swallow matches. */
-	if (!(s = wintoswallow(ev->window))) {
+	if (s = wintoswallow(ev->window))
+		manageswallow(s->client, ev->window, &wa);
+	else
 		manage(ev->window, &wa);
-	}
-	else {
-		manageswallow(s->client, ev->window);
-		swalunqueue(s);
-	}
 
 }
 
@@ -1780,7 +1743,7 @@ propertynotify(XEvent *e)
 				drawbar(c->mon);
 
 			if (swalretroactive && (s = wintoswallow(c->win))) {
-				swal(s->client, c);
+				swal(s->client, c, 0);
 			}
 		}
 		if (ev->atom == netatom[NetWMWindowType])
@@ -1840,7 +1803,7 @@ swalmouse(const Arg *arg)
 		case ClientRegular: /* fallthrough */
 		case ClientSwallowee:
 			if (swer != swee) {
-				swal(swer, swee);
+				swal(swer, swee, 0);
 			}
 			break;
 	}
@@ -2369,7 +2332,7 @@ spawn(const Arg *arg)
  * Perform swallow for two clients.
  */
 void
-swal(Client *swer, Client *swee)
+swal(Client *swer, Client *swee, int manage)
 {
 	/* 'swer' and 'swee' must be regular or swallowee, but not swallower. */
 
@@ -2403,12 +2366,16 @@ swal(Client *swer, Client *swee)
 	 * geometry add to the code below. */
 	swee->tags = swer->tags;
 	swee->mon = swer->mon;
-	swee->x = swer->x;
-	swee->y = swer->y;
-	swee->w = swer->w;
-	swee->h = swer->h;
+	swee->x = swee->oldx = swer->x;
+	swee->y = swee->oldy = swer->y;
+	swee->w = swee->oldw = swer->w;
+	swee->h = swee->oldh = swer->h;
 	swee->isfloating = swer->isfloating;
 	swee->cfact = swer->cfact;
+
+	/* ICCCM 4.1.5 (probably; copied from manage().) */
+	if (manage)
+		configure(swee);
 
 	/* Append swer at the end of swee's swallow chain. */
 	for (c = swee; c->swallowedby; c = c->swallowedby);
@@ -2416,6 +2383,8 @@ swal(Client *swer, Client *swee)
 
 	/* ICCCM 4.1.3.1 */
 	setclientstate(swer, WithdrawnState);
+	if (manage)
+		setclientstate(swee, NormalState);
 
 	/* Move/resize swee and raise the window if it's floating or it may be
 	 * covered up. */
@@ -2424,6 +2393,7 @@ swal(Client *swer, Client *swee)
 		XRaiseWindow(dpy, c->win);
 
 	XUnmapWindow(dpy, swer->win);
+	XMapWindow(dpy, swee->win);
 	arrange(NULL);
 	focus(NULL);
 }
@@ -3257,6 +3227,7 @@ main(int argc, char *argv[])
 //        - [x] retroactive swallow (check swallows when wmname changes; req. for Zathura)
 //        - [x] nested swallow
 //        - [ ] implement manageswallow() by reusing swal(); CONTINUEHERE
+//        - [ ] What about sizehints?
 //        - TEST: What happens if a swallowee gets unmapped/destroyed?
 //        - TEST: Swallow on multiple monitors
 //        - TEST: Run in release mode (no XSYNCHRONIZE)
@@ -3277,6 +3248,8 @@ main(int argc, char *argv[])
 //     - Create terminal on empty tag
 //     - dwmswallow $WINDOWID; zathura
 //     - Ctrl-u (stop swap)
+// - [ ] Focus after swalstop() depends on pointer position.
+//       Might need to ditch all EnterNotifys at the end of swalstop().
 //
 
 // TODO: Hotkey to configure whether urgent windows get shown immediately.
