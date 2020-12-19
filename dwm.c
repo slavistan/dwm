@@ -3256,8 +3256,6 @@ main(int argc, char *argv[])
 //        - [x] Refactor CLI to match swal** naming scheme
 //        - [x] retroactive swallow (check swallows when wmname changes; req. for Zathura)
 //        - [x] nested swallow
-//        - [ ] Replicate all steps of swal() in swer's maprequests.
-//        - [ ] Replicate all steps of swal() in manageswallow().
 //        - [ ] implement manageswallow() by reusing swal(); CONTINUEHERE
 //        - TEST: What happens if a swallowee gets unmapped/destroyed?
 //        - TEST: Swallow on multiple monitors
