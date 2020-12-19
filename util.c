@@ -42,8 +42,6 @@ die(const char *fmt, ...) {
  * maxcount > 0.
  *
  * Inspired by python's split.
- * CONTINUEHERE: Fix split() to output partitions before and after every
- * separator.
  */
 size_t
 split(char *s, const char* sep, char **pbegin, size_t maxcount) {
