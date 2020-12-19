@@ -276,7 +276,7 @@ static void xinitvisual();
 static void zoom(const Arg *arg);
 
 /* variables */
-static const char broken[] = "broken"; /* name for broken client which do not set WM_CLASS*/
+static const char broken[] = "broken"; /* name for broken clients which do not set WM_CLASS*/
 static char stext[256];      /* status text */
 static int screen;
 static int sw, sh;           /* X display screen geometry width, height */
@@ -2003,7 +2003,7 @@ restack(Monitor *m)
 	}
 	XSync(dpy, False);
 
-	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev)); //What's that for?
+	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
 }
 
 void
@@ -2403,24 +2403,22 @@ swal(Client *swer, Client *swee)
 	swee->y = swer->y;
 	swee->w = swer->w;
 	swee->h = swer->h;
-	swee->oldx = swer->oldx;
-	swee->oldy = swer->oldy;
-	swee->oldw = swer->oldw;
-	swee->oldh = swer->oldh;
 	swee->isfloating = swer->isfloating;
-	swee->bw = swer->bw;
-	swee->oldbw = swer->oldbw;
 	swee->cfact = swer->cfact;
 
 	/* Append swer at the end of swee's swallow chain */
 	for (c = swee; c->swallowedby; c = c->swallowedby);
 	c->swallowedby = swer;
 
-	/* Swap swallowee into stack */
+	/* Swap swallowee into client and focus lists */
 	for (pc = &swer->mon->clients; *pc && *pc != swer; pc = &(*pc)->next);
 	*pc = swee;
 	swee->next = swer->next;
-	attachstack(swee);
+	for (pc = &swer->mon->stack; *pc && *pc != swer; pc = &(*pc)->snext);
+	*pc = swee;
+	swee->snext = swer->snext;
+
+	setclientstate(swer, WithdrawnState); /* ICCCM 4.1.3.1 */
 
 	XUnmapWindow(dpy, swer->win);
 	arrange(NULL); /* redraw all monitors */
@@ -2651,25 +2649,49 @@ unmapnotify(XEvent *e)
 void
 swalstop(Client *swee)
 {
+	/* NOTE: swalstop() ignores rules set in config.h */
+
 	Client *swer;
 
 	if (!swee || !(swer = swee->swallowedby))
 		return;
-
 	swee->swallowedby = NULL;
 
-	/* Set fields */
+	/* Configure behavior of swer's window: Use swee's monitor and tags and set
+	 * to non-floating. If you're using patches which modify window geometry or
+	 * want to applyrules() to swer's window adjust the code below. */
 	swer->mon = swee->mon;
 	swer->tags = swee->tags;
+	swer->isfloating = 0;
+	swer->cfact = 1.0;
 
-	/* Attach */
+	/* Attach swer to client and focus lists after swee. This will reinsert
+	 * swer's window after swee's window if tiling is used and will keep the
+	 * current focus. If you want either of these behaviors to change this is
+	 * the place to do it. */
 	swer->next = swee->next;
 	swee->next = swer;
-	attachstack(swer);
+	swer->snext = swee->snext;
+	swee->snext = swer;
 
-	/* Calculate geom and map */
+	// TODO: Prune window size
+	// If isfloating or when floating layout is used the window gets
+	// resized according to its geometry fields which may have been
+	// set on a different, much larger screen.
+
+	/* Draw a normal border for swer's window. If swer was the selected client
+	 * when it swallowed swee its window's border was a drawn using SchemeSel
+	 * and needs to be overridden here. If this step were omitted swer's window
+	 * would exhibit a SchemeSel border even if wasn't the focused client after
+	 * swalstop(). */
+	XSetWindowBorder(dpy, swer->win, scheme[SchemeNorm][ColBorder].pixel);
+
+	/* ICCCM 4.1.3.1 */
+	setclientstate(swer, NormalState);
+
 	arrange(swer->mon);
 	XMapWindow(dpy, swer->win);
+	focus(NULL);
 }
 
 void
@@ -3233,16 +3255,20 @@ main(int argc, char *argv[])
 //        - [x] Refactor CLI to match swal** naming scheme
 //        - [x] retroactive swallow (check swallows when wmname changes; req. for Zathura)
 //        - [x] nested swallow
+//        - [ ] Replicate all steps of swal() in swer's maprequests.
+//        - [ ] Replicate all steps of swal() in manageswallow().
+//        - [ ] Can swalstop() be reused in swer's maprequest?
 //        - TEST: What happens if a swallowee gets unmapped/destroyed?
 //        - TEST: Swallow on multiple monitors
 //        - TEST: Run in release mode (no XSYNCHRONIZE)
 //        - TEST: Fullscreen swallows
-//        - TEST: Floating swallows
+//        - TEST: { Tiling x Floating x Layout } swallows
 //        - TEST: Swallow windows on different tags (and different monitors)
 //        - TEST: Should window extend of remapped swallowers be pruned?
+//        - TEST: Stop swallow on other than the selected monitor (need cli).
 //
 // BUGS: Swallow
-// - [ ] Focus after stopped swallow shall be on swallowee; Seems random.
+// - [ ] Focus shall not be changed by stopping a swallow; Seems random.
 //    (differs between master and slave windows)
 // - [ ] Stopped swallows for master clients created from queue (manageswallow)
 //    produce two windows with a highlighted border.
@@ -3251,6 +3277,10 @@ main(int argc, char *argv[])
 //     - dwmswallow $WINDOWID; zathura
 //     - Ctrl-u (stop swap)
 //
+
+// TODO: Hotkey to configure whether urgent windows get shown immediately.
+//   The default behaviour (always view tag of urgent window) is annoying in
+//   some situations, e.g. when debugging (vscode pops up at every breakpoint).
 
 // Questions:
 //  - Killing a client always produces multiple unmap and destroy notifications. Why?
