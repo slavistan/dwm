@@ -240,7 +240,7 @@ static void spawn(const Arg *arg);
 static void swal(Client *swer, Client *swee, int manage);
 static void swalqueue(Client *c, const char* class, const char* inst, const char* title);
 static void swalmouse(const Arg *arg);
-static void swalstop(Client *c);
+static void swalstop(Client *c, Client *root);
 static void swalstopsel(const Arg *arg);
 static void swalunqueue(Swallow *s);
 static void statusclick(const Arg *arg);
@@ -1501,7 +1501,7 @@ mappingnotify(XEvent *e)
 void
 maprequest(XEvent *e)
 {
-	Client *c, *prev, *root;
+	Client *c, *swee, *root;
 	static XWindowAttributes wa;
 	XMapRequestEvent *ev = &e->xmaprequest;
 	Swallow *s;
@@ -1519,22 +1519,10 @@ maprequest(XEvent *e)
 	case ClientRegular: /* fallthrough */
 	case ClientSwallowee:
 		return;
+	/* Remapping a swallower will simply stop the swallow. */
 	case ClientSwallower:
-		for (prev = root; prev->swallowedby != c; prev = prev->swallowedby);
-		prev->swallowedby = NULL;
-
-		c->mon = root->mon;
-		c->tags = root->tags;
-		c->isfloating = 0;
-
-		c->next = root->next;
-		root->next = c;
-		attachstack(c);
-		focus(NULL);
-		arrange(c->mon);
-		XMapWindow(dpy, c->win);
-		setclientstate(c, NormalState);
-		focus(NULL);
+		for (swee = root; swee->swallowedby != c; swee = swee->swallowedby);
+		swalstop(swee, root);
 		return;
 	}
 
@@ -2416,7 +2404,7 @@ void
 swalstopsel(const Arg *arg)
 {
 	if (selmon->sel && selmon->sel->swallowedby)
-		swalstop(selmon->sel);
+		swalstop(selmon->sel, NULL);
 
 	// TODO: Add arg to remove all active and queued swallows
 }
@@ -2630,8 +2618,9 @@ unmapnotify(XEvent *e)
  * attaches it behind the swallowee.
  */
 void
-swalstop(Client *swee)
+swalstop(Client *swee, Client *root)
 {
+	// TODO: Update comments.
 	/* 'swee' may be NULL, regular or swallowee. */
 
 	Client *swer;
@@ -2639,13 +2628,15 @@ swalstop(Client *swee)
 
 	if (!swee || !(swer = swee->swallowedby))
 		return;
+
 	swee->swallowedby = NULL;
+	root = root ? root : swee;
 
 	/* Configure behavior of swer's window: Use swee's monitor and tags and set
 	 * to non-floating. If you're using patches which modify window geometry or
 	 * want to applyrules() to swer's window adjust the code below. */
-	swer->mon = swee->mon;
-	swer->tags = swee->tags;
+	swer->mon = root->mon;
+	swer->tags = root->tags;
 	swer->isfloating = 0;
 	swer->cfact = 1.0;
 
@@ -2653,10 +2644,10 @@ swalstop(Client *swee)
 	 * swer's window after swee's window if tiling is used and will keep the
 	 * current focus. If you want either of these behaviors to change this is
 	 * the place to do it. */
-	swer->next = swee->next;
-	swee->next = swer;
-	swer->snext = swee->snext;
-	swee->snext = swer;
+	swer->next = root->next;
+	root->next = swer;
+	swer->snext = root->snext;
+	root->snext = swer;
 
 	// TODO: Prune window size
 	// If isfloating or when floating layout is used the window gets
