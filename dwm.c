@@ -202,7 +202,7 @@ static void incnmaster(const Arg *arg);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
 static void manage(Window w, XWindowAttributes *wa);
-static void manageswallow(Swallow *s, Window w, XWindowAttributes *wa);
+static void swalmanage(Swallow *s, Window w, XWindowAttributes *wa);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
 static void monocle(Monitor *m);
@@ -818,29 +818,23 @@ createmon(void)
 void
 destroynotify(XEvent *e)
 {
-	Client *c, *prev, *root;
+	Client *c, *pred, *root;
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
 
 	switch (wintoclient2(ev->window, &c, &root)) {
-	case ClientRegular: /* fallthrough */
 	case ClientSwallowee:
+		swalstop(c, NULL); /* fallthrough */
+	case ClientRegular:
 		unmanage(c, 1);
 		break;
 	case ClientSwallower:
-		for (prev = root; prev->swallowedby != c; prev = prev->swallowedby);
-		prev->swallowedby = NULL;
+		/* If the swallower is swallowed by another client, terminate the
+		 * swallow. This cuts off the swallow chain after the client. */
+		swalstop(c, root);
 
-		if (c->swallowedby) {
-			c->swallowedby->mon = root->mon;
-			c->swallowedby->tags = root->tags;
-			c->swallowedby->next = root->next;
-			root->next = c->swallowedby;
-			attachstack(c->swallowedby);
-			focus(NULL);
-			arrange(c->swallowedby->mon);
-			XMapWindow(dpy, c->swallowedby->win);
-			setclientstate(c->swallowedby, NormalState);
-		}
+		/* Cut off the swallow chain before the client. */
+		for (pred = root; pred->swallowedby != c; pred = pred->swallowedby);
+		pred->swallowedby = NULL;
 
 		free(c);
 		updateclientlist();
@@ -1450,7 +1444,7 @@ manage(Window w, XWindowAttributes *wa)
 }
 
 void
-manageswallow(Swallow *s, Window w, XWindowAttributes *wa)
+swalmanage(Swallow *s, Window w, XWindowAttributes *wa)
 {
 	/* 'swer' and 'swee' must be regular or swallowee, but not swallower. */
 
@@ -1528,7 +1522,7 @@ maprequest(XEvent *e)
 
 	/* No client manages the new window. See if any swallow matches. */
 	if (s = wintoswallow(ev->window))
-		manageswallow(s, ev->window, &wa);
+		swalmanage(s, ev->window, &wa);
 	else
 		manage(ev->window, &wa);
 
@@ -2554,18 +2548,7 @@ unmanage(Client *c, int destroyed)
 	XWindowChanges wc;
 	Monitor *m = c->mon;
 
-	if ((swer = c->swallowedby)) {
-		swer->mon = c->mon;
-		swer->tags = c->tags;
-		swer->cfact = c->cfact;
-		swer->isfloating = c->isfloating;
-
-		swer->next = c->next;
-		c->next = swer;
-		attachstack(swer);
-		resizeclient(swer, c->x, c->y, c->w, c->h);
-		XMapWindow(dpy, swer->win);
-	}
+	/* Remove all queued swallows pertaining to the client. */
 	swalunqueuebyclient(c);
 
 	/* Remove client from lists */
@@ -2597,19 +2580,24 @@ void
 unmapnotify(XEvent *e)
 {
 
-	Client *c;
+	Client *c, *swee, *root;
 	XUnmapEvent *ev = &e->xunmap;
 
-	if ((c = wintoclient(ev->window))) {
-		if (ev->send_event) {
-			/* ICCCM 4.1.4:  When changing the state of the window to
-			 * Withdrawn, the client must (in addition to unmapping the window)
-			 * send a synthetic UnmapNotify event to the root using a SendEvent
-			 * request. */
-			setclientstate(c, WithdrawnState);
-		}
-		else
-			unmanage(c, 0);
+	if (ev->send_event) {
+		/* ICCCM 4.1.4 */
+		setclientstate(c, WithdrawnState);
+		return;
+	}
+
+	switch (wintoclient2(ev->window, &c, &root)) {
+	case ClientSwallowee:
+		swalstop(c, NULL); /* fallthrough */
+	case ClientRegular:
+		unmanage(c, 0);
+		break;
+	/* Swallowers are never mapped. Nothing to do. */
+	case ClientSwallower:
+		break;
 	}
 }
 
@@ -3240,7 +3228,7 @@ main(int argc, char *argv[])
 //        - [x] Refactor CLI to match swal** naming scheme
 //        - [x] retroactive swallow (check swallows when wmname changes; req. for Zathura)
 //        - [x] nested swallow
-//        - [x] implement manageswallow() by reusing swal()
+//        - [x] implement swalmanage() by reusing swal()
 //        - [ ] What about sizehints?
 //        - TEST: What happens if a swallowee gets unmapped/destroyed?
 //        - TEST: Swallow on multiple monitors
@@ -3256,7 +3244,7 @@ main(int argc, char *argv[])
 // BUGS: Swallow
 // - [x] Focus shall not be changed by stopping a swallow; Seems random.
 //    (differs between master and slave windows)
-// - [x] Stopped swallows for master clients created from queue (manageswallow)
+// - [x] Stopped swallows for master clients created from queue (swalmanage)
 //    produce two windows with a highlighted border.
 //    Steps to reproduce:
 //     - Create terminal on empty tag
