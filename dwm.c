@@ -1439,7 +1439,7 @@ manage(Window w, XWindowAttributes *wa)
 	 * top-level client window that is not in the withdrawn state. */
 	setclientstate(c, NormalState);
 
-	// What's that supposed to do?
+	// What's that supposed to do? Doesn't focus do that anyway?
 	if (c->mon == selmon)
 		unfocus(selmon->sel, 0);
 	c->mon->sel = c;
@@ -2623,6 +2623,7 @@ swalstop(Client *swee)
 	/* NOTE: swalstop() ignores rules set in config.h */
 
 	Client *swer;
+	XEvent ev;
 
 	if (!swee || !(swer = swee->swallowedby))
 		return;
@@ -2663,6 +2664,12 @@ swalstop(Client *swee)
 	arrange(swer->mon);
 	XMapWindow(dpy, swer->win);
 	focus(NULL);
+
+	/* Discard all pointer window entry events accumulated during the execution
+	 * of the above requests. This prevents spuriously switching focus to the
+	 * window under the pointer if an XEnterWindowEvent is generated. */
+	XSync(dpy, False);
+	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
 }
 
 void
@@ -3248,7 +3255,7 @@ main(int argc, char *argv[])
 //     - Create terminal on empty tag
 //     - dwmswallow $WINDOWID; zathura
 //     - Ctrl-u (stop swap)
-// - [ ] Focus after swalstop() depends on pointer position.
+// - [x] Focus after swalstop() depends on pointer position.
 //       Might need to ditch all EnterNotifys at the end of swalstop().
 //
 
