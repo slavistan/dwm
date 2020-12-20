@@ -1920,6 +1920,10 @@ resizemouse(const Arg *arg)
 	}
 }
 
+/*
+ * Apply stacking order as represented by the stack list to all tiled windows,
+ * starting with the bar.
+ */
 void
 restack(Monitor *m)
 {
@@ -1936,8 +1940,6 @@ restack(Monitor *m)
 	if (m->sel->isfloating || !m->lt[m->sellt]->arrange)
 		XRaiseWindow(dpy, m->sel->win);
 
-	/* Apply stacking order as represented by the stack list to all tiled
-	 * windows, beginning at the bar. */
 	if (m->lt[m->sellt]->arrange) {
 		wc.stack_mode = Below;
 		wc.sibling = m->barwin;
@@ -2387,14 +2389,9 @@ swal(Client *swer, Client *swee, int manage)
 	XUnmapWindow(dpy, swer->win);
 	if (manage)
 		XMapWindow(dpy, swee->win);
-	arrange(NULL);
 	focus(NULL);
-
-	/* Discard all pointer window entry events accumulated during the execution
-	 * of the above requests. This prevents spuriously switching focus to the
-	 * window under the pointer if an XEnterWindowEvent is generated. */
-	XSync(dpy, False);
-	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
+	arrange(NULL);
+	restack(swer->mon);
 }
 
 /*
@@ -2658,19 +2655,9 @@ swalstop(Client *swee, Client *root)
 	/* ICCCM 4.1.3.1 */
 	setclientstate(swer, NormalState);
 
-	arrange(swer->mon);
 	XMapWindow(dpy, swer->win);
 	focus(NULL);
-
-	/* Discard all pointer window entry events accumulated during the execution
-	 * of the above requests. This prevents spuriously switching focus to the
-	 * window under the pointer if an XEnterWindowEvent is generated. */
-	// TODO: Check if this is necessary.
-	// arrange() does discard EnterWindowEvents and seems able to do the job.
-	// Check unmanage() and note the order of arrange() and focus() compared
-	// to manage().
-	XSync(dpy, False);
-	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
+	arrange(swer->mon);
 }
 
 void
