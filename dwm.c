@@ -1785,12 +1785,12 @@ swalmouse(const Arg *arg)
 	/* TODO: Check if this switch-case can be removed since
 	 *		 swallowers are never visible and cannot be selected by mouse. */
 	switch (wintoclient2(ev.xbutton.subwindow, &swer, NULL)) {
-		case ClientRegular: /* fallthrough */
-		case ClientSwallowee:
-			if (swer != swee) {
-				swal(swer, swee, 0);
-			}
-			break;
+	case ClientRegular: /* fallthrough */
+	case ClientSwallowee:
+		if (swer != swee) {
+			swal(swer, swee, 0);
+		}
+		break;
 	}
 
 	/* Remove accumulated pending EnterWindow events */
@@ -2339,11 +2339,16 @@ swal(Client *swer, Client *swee, int manage)
 	setfullscreen(swee, 0);
 
 	/* Swap swallowee into client and focus lists. Keeps current focus unless
-	 * the swer is focused in which case the swee will become focused. */
+	 * the swer (which gets unmapped) is focused in which case the swee will
+	 * receive focus. */
 	detach(swee);
 	for (pc = &swer->mon->clients; *pc && *pc != swer; pc = &(*pc)->next);
 	*pc = swee;
 	swee->next = swer->next;
+	if (swee->mon == swer->mon && swee->mon->sel == swee) {
+		detachstack(swer);
+		attachstack(swer);
+	}
 	detachstack(swee);
 	for (pc = &swer->mon->stack; *pc && *pc != swer; pc = &(*pc)->snext);
 	*pc = swee;
@@ -2380,7 +2385,8 @@ swal(Client *swer, Client *swee, int manage)
 		XRaiseWindow(dpy, c->win);
 
 	XUnmapWindow(dpy, swer->win);
-	XMapWindow(dpy, swee->win);
+	if (manage)
+		XMapWindow(dpy, swee->win);
 	arrange(NULL);
 	focus(NULL);
 
