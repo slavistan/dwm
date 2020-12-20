@@ -1515,9 +1515,9 @@ maprequest(XEvent *e)
 		return;
 
 	switch (wintoclient2(ev->window, &c, &root)) {
+	/* Regulars and swallowees are always mapped. Nothing to do. */
 	case ClientRegular: /* fallthrough */
 	case ClientSwallowee:
-		/* should never happen; regulars and swallowees are always mapped. */
 		return;
 	case ClientSwallower:
 		for (prev = root; prev->swallowedby != c; prev = prev->swallowedby);
@@ -2570,8 +2570,9 @@ unmanage(Client *c, int destroyed)
 		swer->mon = c->mon;
 		swer->tags = c->tags;
 		swer->cfact = c->cfact;
-		swer->next = c->next;
 		swer->isfloating = c->isfloating;
+
+		swer->next = c->next;
 		c->next = swer;
 		attachstack(swer);
 		resizeclient(swer, c->x, c->y, c->w, c->h);
@@ -2679,6 +2680,10 @@ swalstop(Client *swee)
 	/* Discard all pointer window entry events accumulated during the execution
 	 * of the above requests. This prevents spuriously switching focus to the
 	 * window under the pointer if an XEnterWindowEvent is generated. */
+	// TODO: Check if this is necessary.
+	// arrange() does discard EnterWindowEvents and seems able to do the job.
+	// Check unmanage() and note the order of arrange() and focus() compared
+	// to manage().
 	XSync(dpy, False);
 	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
 }
