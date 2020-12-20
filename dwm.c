@@ -202,7 +202,7 @@ static void incnmaster(const Arg *arg);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
 static void manage(Window w, XWindowAttributes *wa);
-static void manageswallow(Client *c, Window w, XWindowAttributes *wa);
+static void manageswallow(Swallow *s, Window w, XWindowAttributes *wa);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
 static void monocle(Monitor *m);
@@ -1450,12 +1450,15 @@ manage(Window w, XWindowAttributes *wa)
 }
 
 void
-manageswallow(Client *swer, Window w, XWindowAttributes *wa)
+manageswallow(Swallow *s, Window w, XWindowAttributes *wa)
 {
 	/* 'swer' and 'swee' must be regular or swallowee, but not swallower. */
 
-	Client *swee, **pc;
+	Client *swee, *swer, **pc;
 	XWindowChanges wc;
+
+	swer = s->client;
+	swalunqueue(s);
 
 	/* Perform bare minimum setup of a client for window 'w' such that swal()
 	 * may be used to perform the swallow. The following lines are basically a
@@ -1537,7 +1540,7 @@ maprequest(XEvent *e)
 
 	/* No client manages the new window. See if any swallow matches. */
 	if (s = wintoswallow(ev->window))
-		manageswallow(s->client, ev->window, &wa);
+		manageswallow(s, ev->window, &wa);
 	else
 		manage(ev->window, &wa);
 
@@ -2338,12 +2341,14 @@ swal(Client *swer, Client *swee, int manage)
 
 	Client *c, **pc;
 	Swallow *s;
+	XEvent ev;
 
 	/* Remove any swallows queued for the swer. Asking a swallower to swallow
 	 * another window is ambiguous and is thus avoided altogether. In contrast,
 	 * a swallowee can swallow in a well-defined manner by attaching to the
 	 * head of the swallow chain. */
-	swalunqueuebyclient(swer);
+	if (!manage)
+		swalunqueuebyclient(swer);
 
 	/* Disable fullscreen prior to swallow. Swallows involving fullscreen
 	 * windows produces quirky artefacts such as fullscreen terminals or tiled
@@ -2396,6 +2401,12 @@ swal(Client *swer, Client *swee, int manage)
 	XMapWindow(dpy, swee->win);
 	arrange(NULL);
 	focus(NULL);
+
+	/* Discard all pointer window entry events accumulated during the execution
+	 * of the above requests. This prevents spuriously switching focus to the
+	 * window under the pointer if an XEnterWindowEvent is generated. */
+	XSync(dpy, False);
+	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
 }
 
 /*
@@ -2620,7 +2631,7 @@ unmapnotify(XEvent *e)
 void
 swalstop(Client *swee)
 {
-	/* NOTE: swalstop() ignores rules set in config.h */
+	/* 'swee' may be NULL, regular or swallowee. */
 
 	Client *swer;
 	XEvent ev;
@@ -3233,7 +3244,7 @@ main(int argc, char *argv[])
 //        - [x] Refactor CLI to match swal** naming scheme
 //        - [x] retroactive swallow (check swallows when wmname changes; req. for Zathura)
 //        - [x] nested swallow
-//        - [ ] implement manageswallow() by reusing swal(); CONTINUEHERE
+//        - [x] implement manageswallow() by reusing swal()
 //        - [ ] What about sizehints?
 //        - TEST: What happens if a swallowee gets unmapped/destroyed?
 //        - TEST: Swallow on multiple monitors
