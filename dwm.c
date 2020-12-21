@@ -1433,7 +1433,7 @@ manage(Window w, XWindowAttributes *wa)
 	 * top-level client window that is not in the withdrawn state. */
 	setclientstate(c, NormalState);
 
-	// What's that supposed to do? Doesn't focus do that anyway?
+	// ???: What's that supposed to do? Doesn't focus do that anyway?
 	if (c->mon == selmon)
 		unfocus(selmon->sel, 0);
 	c->mon->sel = c;
@@ -2386,11 +2386,11 @@ swal(Client *swer, Client *swee, int manage)
 	if (c->isfloating)
 		XRaiseWindow(dpy, c->win);
 
-	XUnmapWindow(dpy, swer->win);
-	if (manage)
-		XMapWindow(dpy, swee->win);
 	focus(NULL);
 	arrange(NULL);
+	if (manage)
+		XMapWindow(dpy, swee->win);
+	XUnmapWindow(dpy, swer->win);
 	restack(swer->mon);
 }
 
@@ -3223,6 +3223,9 @@ main(int argc, char *argv[])
 //        - [x] nested swallow
 //        - [x] implement swalmanage() by reusing swal()
 //        - [ ] What about sizehints?
+//              + resizehints are respected in tiling mode
+//              + When swallowed by a floating client, hints are not respected and the
+//				  swer's geometry is adopted.
 //        - TEST: What happens if a swallowee gets unmapped/destroyed?
 //        - TEST: Swallow on multiple monitors
 //        - TEST: Run in release mode (no XSYNCHRONIZE)
