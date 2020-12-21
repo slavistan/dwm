@@ -3224,7 +3224,8 @@ main(int argc, char *argv[])
 // TODO: valgrind memcheck
 
 // TODO: Swallow features
-// 		  - [ ] swaldecay
+// 	CONTINUEHERE: Extensive testing
+// 		  - [x] swaldecay
 // 		  - [ ] Nomenclature: pool vs queue
 //        - [x] delete swallows from list
 //           - [x] by swallow 's'
