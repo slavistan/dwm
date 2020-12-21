@@ -159,6 +159,7 @@ struct Swallow {
 	char class[256];
 	char inst[256];
 	char title[256];
+	int decay;
 	Client *client; /* swallower */
 	Swallow *next;
 };
@@ -238,6 +239,7 @@ static void sighup(int unused);
 static void sigterm(int unused);
 static void spawn(const Arg *arg);
 static void swal(Client *swer, Client *swee, int manage);
+static void swaldecayby(int decayby);
 static void swalqueue(Client *c, const char* class, const char* inst, const char* title);
 static void swalmouse(const Arg *arg);
 static void swalstop(Client *c, Client *root);
@@ -1036,6 +1038,7 @@ fakesignal(void)
 	else if (!strcmp(segments[0], "swallow")) {
 		Client *swer, *swee;
 		Window winswer, winswee;
+		int typeswer, typeswee;
 
 		/* Params: swallower, swallowee */
 		if (numargs < 2) {
@@ -1043,11 +1046,12 @@ fakesignal(void)
 		}
 
 		winswer = strtoul(segments[1], NULL, 0);
+		typeswer = wintoclient2(winswer, &swer, NULL);
 		winswee = strtoul(segments[2], NULL, 0);
-		if (wintoclient2(winswer, &swer, NULL) != ClientSwallower
-			&& wintoclient2(winswee, &swee, NULL) != ClientSwallower) {
+		typeswee = wintoclient2(winswee, &swee, NULL);
+		if ((typeswer == ClientRegular || typeswer == ClientSwallowee)
+			&& (typeswee == ClientRegular || typeswee == ClientSwallowee))
 			swal(swer, swee, 0);
-		}
 		return 1;
 	}
 
@@ -1309,6 +1313,23 @@ killclient(const Arg *arg)
 }
 
 /*
+ * Comment: For months of uptime
+ */
+void
+swaldecayby(int decayby)
+{
+	Swallow *s, *t;
+
+	for (s = swallows; s; s = t) {
+		s->decay -= decayby;
+		t = s->next;
+		if (s->decay <= 0) {
+			swalunqueue(s);
+		}
+	}
+}
+
+/*
  * Create a swallow instance and attach it to the top of the list of swallows.
  * 'class', 'inst' and 'title' shall point null-terminated strings or be NULL,
  * implying a wildcard. If 'c' corresponds to an existing swallow, the
@@ -1318,12 +1339,7 @@ killclient(const Arg *arg)
 void
 swalqueue(Client *c, const char *class, const char *inst, const char *title)
 {
-	/*
-	 * Unsafe; Caller must ensure that 'c'
-	 *  - is not swallowing
-	 *  - is not swallowed
-	 * Nested swallowing will be implemented in the future.
-	 */
+	/* 'c' may be regular or swallowee. */
 
 	Swallow *s;
 
@@ -1345,12 +1361,13 @@ swalqueue(Client *c, const char *class, const char *inst, const char *title)
 				strncpy(s->title, title, sizeof(s->title) - 1);
 			else
 				s->title[0] = '\0';
-
+			s->decay = swaldecay;
 			return;
 		}
 	}
 
 	s = ecalloc(1, sizeof(Swallow));
+	s->decay = swaldecay;
 	s->client = c;
 	if (class)
 		strncpy(s->class, class, sizeof(s->class) - 1);
@@ -1526,6 +1543,9 @@ maprequest(XEvent *e)
 	else
 		manage(ev->window, &wa);
 
+	/* Reduce decay counter of all swallows. */
+	if (swaldecay)
+		swaldecayby(1);
 }
 
 /*
@@ -1798,9 +1818,9 @@ swalmouse(const Arg *arg)
 }
 
 /*
- * Remove swallow instance from list of swallows and free its resources.
- * Complement to swalqueue(). If NULL is passed every swallow is
- * deleted from the list.
+ * Remove swallow instance from pool of swallows and free its resources.
+ * Complement to swalqueue(). If NULL is passed all swallows are deleted from
+ * the pool.
  */
 void
 swalunqueue(Swallow *s)
@@ -3204,6 +3224,8 @@ main(int argc, char *argv[])
 // TODO: valgrind memcheck
 
 // TODO: Swallow features
+// 		  - [ ] swaldecay
+// 		  - [ ] Nomenclature: pool vs queue
 //        - [x] delete swallows from list
 //           - [x] by swallow 's'
 //           - [x] all

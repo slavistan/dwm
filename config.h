@@ -17,7 +17,6 @@ static const char col_white[]      = "#ffffff";
 static const float barpady         = 12; /* y-padding of bar; if ≤ 1, padding is rel. to font height, otherwise absolute in pixels */
 static const unsigned int baralpha = OPAQUE;
 static const unsigned int borderalpha = OPAQUE;
-static const char swalsymb[] = "👅";
 static const char *colors[][3]     = {
 	/*               fg       , bg       , border */
 	[SchemeNorm] = { col_white, col_gray1, col_gray1 },
@@ -46,8 +45,10 @@ static const Rule rules[] = {
 	{ "Firefox"        , NULL        , NULL , (1 << 1) , 0         , -1 },
 };
 
-/* swallow */
+/* window swallowing */
+static const int swaldecay = 3; /* TODO: Description */
 static const int swalretroactive = 1; /* TODO: Description */
+static const char swalsymb[] = "👅";
 
 /* layout(s) */
 static const float mfact     = 0.55; /* factor of master area size [0.05..0.95] */
