@@ -2346,7 +2346,8 @@ spawn(const Arg *arg)
 }
 
 /*
- * Perform swallow for two clients.
+ * Perform immediate swallow of client 'swee' by client 'swer'. 'manage' is set
+ * if swal() is called from swalmanage().
  */
 void
 swal(Client *swer, Client *swee, int manage)
@@ -2637,15 +2638,13 @@ unmapnotify(XEvent *e)
 }
 
 /*
- * Stop an active swallow. Unswallows a swallowee, re-maps the swallower and
- * attaches it behind the swallowee.
+ * Stop an active swallow of swallowed client 'swee' remapping the swallower.
+ * If 'swee' is a swallower itself 'root' must point the root client of the
+ * swallow chain containing 'swee'.
  */
 void
 swalstop(Client *swee, Client *root)
 {
-	// TODO: Update comments.
-	/* 'swee' may be NULL, regular or swallowee. */
-
 	Client *swer;
 	XEvent ev;
 
@@ -2655,17 +2654,17 @@ swalstop(Client *swee, Client *root)
 	swee->swallowedby = NULL;
 	root = root ? root : swee;
 
-	/* Configure behavior of swer's window: Use swee's monitor and tags and set
-	 * to non-floating. If you're using patches which modify window geometry or
+	/* Configure behavior of swer's window: Use root's monitor, tags and set to
+	 * non-floating. If you're using patches which modify window geometry or
 	 * want to applyrules() to swer's window adjust the code below. */
 	swer->mon = root->mon;
 	swer->tags = root->tags;
 	swer->isfloating = 0;
-	swer->x = swer->y = 0; /* applies to floating layout */
+	swer->x = swer->y = 0; /* applies to floating layout only */
 	swer->cfact = 1.0;
 
-	/* Attach swer to client and focus lists after swee. This will reinsert
-	 * swer's window after swee's window if tiling is used and will keep the
+	/* Attach swer to client and focus lists after root. This will reinsert
+	 * swer's window after root's window if tiling is used and will keep the
 	 * current focus. If you want either of these behaviors to change this is
 	 * the place to do it. */
 	swer->next = root->next;
@@ -2681,8 +2680,8 @@ swalstop(Client *swee, Client *root)
 	/* Draw a normal border for swer's window. If swer was the selected client
 	 * when it swallowed swee its window's border was a drawn using SchemeSel
 	 * and needs to be overridden here. If this step were omitted swer's window
-	 * would exhibit a SchemeSel border even if wasn't the focused client after
-	 * swalstop(). */
+	 * would exhibit a SchemeSel border even if it wasn't the focused client
+	 * after swalstop(). */
 	XSetWindowBorder(dpy, swer->win, scheme[SchemeNorm][ColBorder].pixel);
 
 	/* ICCCM 4.1.3.1 */
