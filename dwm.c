@@ -1815,18 +1815,12 @@ swalmouse(const Arg *arg)
 	} while (ev.type != ButtonRelease);
 	XUngrabPointer(dpy, CurrentTime);
 
-	/* TODO: Check if this switch-case can be removed since
-	 *		 swallowers are never visible and cannot be selected by mouse. */
-	switch (wintoclient2(ev.xbutton.subwindow, &swer, NULL)) {
-	case ClientRegular: /* fallthrough */
-	case ClientSwallowee:
-		if (swer != swee) {
-			swal(swer, swee, 0);
-		}
-		break;
-	}
+	if ((swer = wintoclient(ev.xbutton.subwindow))
+		&& swer != swee)
+		swal(swer, swee, 0);
 
-	/* Remove accumulated pending EnterWindow events */
+	/* Remove accumulated pending EnterWindow events caused by the mouse
+	 * movements. */
 	XCheckMaskEvent(dpy, EnterWindowMask, &ev);
 }
 
