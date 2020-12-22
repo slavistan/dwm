@@ -1323,7 +1323,8 @@ killclient(const Arg *arg)
 }
 
 /*
- * Comment: For months of uptime
+ * Decrease decay counter of all swallows in the pool by 'decayby' and remove
+ * any swallow instances whose counter is less than or equal to zero.
  */
 void
 swaldecayby(int decayby)
@@ -1333,30 +1334,26 @@ swaldecayby(int decayby)
 	for (s = swallows; s; s = t) {
 		s->decay -= decayby;
 		t = s->next;
-		if (s->decay <= 0) {
+		if (s->decay <= 0)
 			swalrmpool(s);
-		}
 	}
 }
 
 /*
- * Create a swallow instance and attach it to the top of the list of swallows.
+ * Create a swallow instance targeting client 'c' and add it to the pool.
  * 'class', 'inst' and 'title' shall point null-terminated strings or be NULL,
  * implying a wildcard. If 'c' corresponds to an existing swallow, the
  * swallow's filters are updated and no new swallow instance is created.
- * Complement to swalrmpool().
+ * 'c' may be regular or swallowee. Complement to swalrmpool().
  */
 void
 swaladdpool(Client *c, const char *class, const char *inst, const char *title)
 {
-	/* 'c' may be regular or swallowee. */
-
 	Swallow *s;
 
 	if (!c)
 		return;
 
-	/* Update swallow filters for existing, queued swallower */
 	for (s = swallows; s; s = s->next) {
 		if (s->client == c) {
 			if (class)
@@ -1372,6 +1369,8 @@ swaladdpool(Client *c, const char *class, const char *inst, const char *title)
 			else
 				s->title[0] = '\0';
 			s->decay = swaldecay;
+
+			/* Only one swallow per client. May return after first hit. */
 			return;
 		}
 	}
@@ -1386,7 +1385,6 @@ swaladdpool(Client *c, const char *class, const char *inst, const char *title)
 	if (title)
 		strncpy(s->title, title, sizeof(s->title) - 1);
 
-	/* Attach new swallow at top of the list */
 	s->next = swallows;
 	swallows = s;
 }
@@ -1470,11 +1468,13 @@ manage(Window w, XWindowAttributes *wa)
 	focus(NULL);
 }
 
+/*
+ * Window configuration and client setup for new windows which are to be
+ * swallowed. Pendant to manage().
+ */
 void
 swalmanage(Swallow *s, Window w, XWindowAttributes *wa)
 {
-	/* 'swer' and 'swee' must be regular or swallowee, but not swallower. */
-
 	Client *swee, *swer, **pc;
 	XWindowChanges wc;
 
@@ -1787,6 +1787,9 @@ recttomon(int x, int y, int w, int h)
 	return r;
 }
 
+/*
+ * Interactive drag-and-drop swallow.
+ */
 void
 swalmouse(const Arg *arg)
 {
@@ -2346,14 +2349,13 @@ spawn(const Arg *arg)
 }
 
 /*
- * Perform immediate swallow of client 'swee' by client 'swer'. 'manage' is set
- * if swal() is called from swalmanage().
+ * Perform immediate swallow of client 'swee' by client 'swer'. 'manage' shall
+ * be set if swal() is called from swalmanage(). 'swer' and 'swee' must be
+ * regular or swallowee, but not swallower.
  */
 void
 swal(Client *swer, Client *swee, int manage)
 {
-	/* 'swer' and 'swee' must be regular or swallowee, but not swallower. */
-
 	Client *c, **pc;
 	Swallow *s;
 	XEvent ev;
@@ -2584,7 +2586,7 @@ unmanage(Client *c, int destroyed)
 	XWindowChanges wc;
 	Monitor *m = c->mon;
 
-	/* Remove all queued swallows pertaining to the client. */
+	/* Remove all swallow instances from the pool pertaining to the client. */
 	swalrmpoolbyclient(c);
 
 	/* Remove client from lists */
@@ -3037,7 +3039,7 @@ wintoclient2(Window w, Client **pc, Client **proot)
 /*
  * Return swallow instance from pool which targets window 'w' as determined by
  * its class name, instance name and window title. Returns NULL if none is
- * found. Pendant to wintoclient.
+ * found. Pendant to wintoclient().
  */
 Swallow *
 swalmatch(Window w)
