@@ -159,8 +159,17 @@ struct Swallow {
 	char class[256];
 	char inst[256];
 	char title[256];
+
+	/* Used to remove swallow instance from pool after 'swaldecay' windows were
+	 * mapped without the swallow having been consumed. 'decay' keeps track of
+	 * the remaining "charges". */
 	int decay;
-	Client *client; /* swallower */
+
+	/* The swallower, i.e. the client which will swallow the next mapped window
+	 * whose filters match the above properties. */
+	Client *client;
+
+	/* The swallow pool is implemented as linked list. */
 	Swallow *next;
 };
 
@@ -203,7 +212,6 @@ static void incnmaster(const Arg *arg);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
 static void manage(Window w, XWindowAttributes *wa);
-static void swalmanage(Swallow *s, Window w, XWindowAttributes *wa);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
 static void monocle(Monitor *m);
@@ -239,12 +247,15 @@ static void sighup(int unused);
 static void sigterm(int unused);
 static void spawn(const Arg *arg);
 static void swal(Client *swer, Client *swee, int manage);
+static void swaladdpool(Client *c, const char* class, const char* inst, const char* title);
 static void swaldecayby(int decayby);
-static void swalqueue(Client *c, const char* class, const char* inst, const char* title);
+static void swalmanage(Swallow *s, Window w, XWindowAttributes *wa);
+static Swallow *swalmatch(Window w);
 static void swalmouse(const Arg *arg);
+static void swalrmpool(Swallow *s);
+static void swalrmpoolbyclient(Client *c);
 static void swalstop(Client *c, Client *root);
 static void swalstopsel(const Arg *arg);
-static void swalunqueue(Swallow *s);
 static void statusclick(const Arg *arg);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
@@ -269,7 +280,6 @@ static void updatewmhints(Client *c);
 static void view(const Arg *arg);
 static Client *wintoclient(Window w);
 static int wintoclient2(Window w, Client **pc, Client **proot);
-static Swallow *wintoswallow(Window w);
 static Monitor *wintomon(Window w);
 static int xerror(Display *dpy, XErrorEvent *ee);
 static int xerrordummy(Display *dpy, XErrorEvent *ee);
@@ -1031,7 +1041,7 @@ fakesignal(void)
 		switch (wintoclient2(w, &c, NULL)) {
 		case ClientRegular: /* fallthrough */
 		case ClientSwallowee:
-			swalqueue(c, segments[2], segments[3], segments[4]);
+			swaladdpool(c, segments[2], segments[3], segments[4]);
 			break;
 		}
 	}
@@ -1324,7 +1334,7 @@ swaldecayby(int decayby)
 		s->decay -= decayby;
 		t = s->next;
 		if (s->decay <= 0) {
-			swalunqueue(s);
+			swalrmpool(s);
 		}
 	}
 }
@@ -1334,10 +1344,10 @@ swaldecayby(int decayby)
  * 'class', 'inst' and 'title' shall point null-terminated strings or be NULL,
  * implying a wildcard. If 'c' corresponds to an existing swallow, the
  * swallow's filters are updated and no new swallow instance is created.
- * Complement to swalunqueue().
+ * Complement to swalrmpool().
  */
 void
-swalqueue(Client *c, const char *class, const char *inst, const char *title)
+swaladdpool(Client *c, const char *class, const char *inst, const char *title)
 {
 	/* 'c' may be regular or swallowee. */
 
@@ -1469,7 +1479,7 @@ swalmanage(Swallow *s, Window w, XWindowAttributes *wa)
 	XWindowChanges wc;
 
 	swer = s->client;
-	swalunqueue(s);
+	swalrmpool(s);
 
 	/* Perform bare minimum setup of a client for window 'w' such that swal()
 	 * may be used to perform the swallow. The following lines are basically a
@@ -1538,7 +1548,7 @@ maprequest(XEvent *e)
 	}
 
 	/* No client manages the new window. See if any swallow matches. */
-	if (s = wintoswallow(ev->window))
+	if (s = swalmatch(ev->window))
 		swalmanage(s, ev->window, &wa);
 	else
 		manage(ev->window, &wa);
@@ -1747,7 +1757,7 @@ propertynotify(XEvent *e)
 			if (c == c->mon->sel)
 				drawbar(c->mon);
 
-			if (swalretroactive && (s = wintoswallow(c->win))) {
+			if (swalretroactive && (s = swalmatch(c->win))) {
 				swal(s->client, c, 0);
 			}
 		}
@@ -1819,11 +1829,11 @@ swalmouse(const Arg *arg)
 
 /*
  * Remove swallow instance from pool of swallows and free its resources.
- * Complement to swalqueue(). If NULL is passed all swallows are deleted from
+ * Complement to swaladdpool(). If NULL is passed all swallows are deleted from
  * the pool.
  */
 void
-swalunqueue(Swallow *s)
+swalrmpool(Swallow *s)
 {
 	Swallow *t, **ps;
 
@@ -1845,13 +1855,13 @@ swalunqueue(Swallow *s)
  * Removes swallow queued for a specific client.
  */
 void
-swalunqueuebyclient(Client *c)
+swalrmpoolbyclient(Client *c)
 {
 	Swallow *s;
 
 	for (s = swallows; s; s = s->next) {
 		if (c == s->client) {
-			swalunqueue(s);
+			swalrmpool(s);
 			break; /* max. 1 queued swallow per client */
 		}
 	}
@@ -2353,7 +2363,7 @@ swal(Client *swer, Client *swee, int manage)
 	 * a swallowee can swallow in a well-defined manner by attaching to the
 	 * head of the swallow chain. */
 	if (!manage)
-		swalunqueuebyclient(swer);
+		swalrmpoolbyclient(swer);
 
 	/* Disable fullscreen prior to swallow. Swallows involving fullscreen
 	 * windows produces quirky artefacts such as fullscreen terminals or tiled
@@ -2574,7 +2584,7 @@ unmanage(Client *c, int destroyed)
 	Monitor *m = c->mon;
 
 	/* Remove all queued swallows pertaining to the client. */
-	swalunqueuebyclient(c);
+	swalrmpoolbyclient(c);
 
 	/* Remove client from lists */
 	detach(c);
@@ -2988,6 +2998,12 @@ wintoclient(Window w)
 	return NULL;
 }
 
+/*
+ * Writes client managing window 'w' into 'pc' and returns type of client. If
+ * no client is found NULL is written to 'pc' and zero is returned. If a client
+ * is found and is a swallower (ClientSwallower) and proot is not NULL the root
+ * client of the swallow chain is written to 'proot'.
+ */
 int
 wintoclient2(Window w, Client **pc, Client **proot)
 {
@@ -2997,19 +3013,16 @@ wintoclient2(Window w, Client **pc, Client **proot)
 	for (m = mons; m; m = m->next) {
 		for (c = m->clients; c; c = c->next) {
 			if (c->win == w) {
-				if (!c->swallowedby) {
-					*pc = c;
-					return ClientRegular;
-				}
-				else {
-					*pc = c;
+				*pc = c;
+				if (c->swallowedby)
 					return ClientSwallowee;
-				}
+				else
+					return ClientRegular;
 			}
 			else {
 				for (d = c->swallowedby; d; d = d->swallowedby) {
 					if (d->win == w) {
-						if (proot) /* set root client of swallow chain */
+						if (proot)
 							*proot = c;
 						*pc = d;
 						return ClientSwallower;
@@ -3019,28 +3032,25 @@ wintoclient2(Window w, Client **pc, Client **proot)
 		}
 	}
 	*pc = NULL;
-	return 0; /* no match */
+	return 0;
 }
 
 /*
- * Return swallow instance which targets window 'w' as determined by its class
- * name, instance name and window title. Returns NULL if none is found. Pendant
- * to wintoclient.
+ * Return swallow instance from pool which targets window 'w' as determined by
+ * its class name, instance name and window title. Returns NULL if none is
+ * found. Pendant to wintoclient.
  */
 Swallow *
-wintoswallow(Window w)
+swalmatch(Window w)
 {
 	XClassHint ch = { NULL, NULL };
 	Swallow *s = NULL;
-	char title[sizeof(s->title)]; /* C Question: Determine a struct's member's static size */
+	char title[sizeof(s->title)];
 
-	/* Retrieve the window's class name, instance name and title. */
 	XGetClassHint(dpy, w, &ch);
 	if (!gettextprop(w, netatom[NetWMName], title, sizeof(title)))
 		gettextprop(w, XA_WM_NAME, title, sizeof(title));
 
-	/* Search for matching swallow. Compare class, instance and title. Any
-	 * unset property implies a wildcard */
 	for (s = swallows; s; s = s->next) {
 		if ((!ch.res_class || strstr(ch.res_class, s->class))
 			&& (!ch.res_name || strstr(ch.res_name, s->inst))
@@ -3052,7 +3062,6 @@ wintoswallow(Window w)
 		XFree(ch.res_class);
 	if (ch.res_name)
 		XFree(ch.res_name);
-
 	return s;
 }
 
@@ -3233,7 +3242,7 @@ main(int argc, char *argv[])
 //        - [x] delete swallows from list
 //           - [x] by swallow 's'
 //           - [x] all
-//           - [x] by window (indirect: wintoswallow)
+//           - [x] by window (indirect: swalmatch)
 //        - [ ] unswallow: swalstop()
 //           - [x] by client
 //           - [x] by window (indirect)
@@ -3264,6 +3273,8 @@ main(int argc, char *argv[])
 //        - TEST: swallow on non-selected tags
 //
 // BUGS: Swallow
+// - [ ] Crashing when VSCode asks to unlock the GPG keyring (??)
+//       Cannot reproduce.
 // - [x] Focus shall not be changed by stopping a swallow; Seems random.
 //    (differs between master and slave windows)
 // - [x] Stopped swallows for master clients created from queue (swalmanage)
