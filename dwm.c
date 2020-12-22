@@ -255,7 +255,7 @@ static void swalmouse(const Arg *arg);
 static void swalrmpool(Swallow *s);
 static void swalrmpoolbyclient(Client *c);
 static void swalstop(Client *c, Client *root);
-static void swalstopsel(const Arg *arg);
+static void swalstopsel(const Arg *unused);
 static void statusclick(const Arg *arg);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
@@ -322,7 +322,7 @@ Display *dpy;
 static Drw *drw;
 static Monitor *mons, *selmon; /* monitor list, selected monitor */
 static Window root, wmcheckwin;
-static Swallow *swallows; /* list of registered swallows */
+static Swallow *swallows; /* swallow pool (first elem of linked list) */
 
 static int useargb = 0;
 static Visual *visual;
@@ -946,9 +946,10 @@ drawbar(Monitor *m)
 	drw_setscheme(drw, scheme[SchemeNorm]);
 	x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
 
+	/* Draw swalsymbol next to lysymbol. */
 	if (m->sel && m->sel->swallowedby) {
-		w = TEXTW(swalsymb);
-		x = drw_text(drw, x, 0, w, bh, lrpad / 2, swalsymb, 0);
+		w = TEXTW(swalsymbol);
+		x = drw_text(drw, x, 0, w, bh, lrpad / 2, swalsymbol, 0);
 	}
 
 	if ((w = m->ww - sw - x) > bh) { // larger than bar height? the fuck?
@@ -1007,9 +1008,7 @@ expose(XEvent *e)
 int
 fakesignal(void)
 {
-	/* Unsafe; Input is not checked for correct syntax */
-
-	/* Syntax: <SEP><COMMAND>[<SEP><ARG>]... */
+	/* Command syntax: <PREFIX><COMMAND>[<SEP><ARG>]... */
 	static const char sep[] = "###";
 	static const char prefix[] = "#!";
 
@@ -1023,48 +1022,39 @@ fakesignal(void)
 		return 0;
 	}
 	numsegments = split(rootname + sizeof(prefix) - 1, sep, segments, sizeof(segments));
-	numargs = numsegments - 1; /* number of parameters to the "command" */
+	numargs = numsegments - 1; /* number of arguments to COMMAND */
 
-	if (!strcmp(segments[0], "swallowqueue")) {
+	if (!strcmp(segments[0], "swaladdpool")) {
+		/* Params: windowid, [class], [instance], [title] */
 		Window w;
 		Client *c;
 
-		/* Params: windowid, [class], [instance], [title] */
-		if (numargs == 0) { /* need at least a window id */
-			return 1;
-		}
-		w = strtoul(segments[1], NULL, 0);
-
-		/* Only regular clients, i.e. clients not involved in a swallow are
-		 * allowed to swallow. Nested swallowing will be implemented in the
-		 * future. */
-		switch (wintoclient2(w, &c, NULL)) {
-		case ClientRegular: /* fallthrough */
-		case ClientSwallowee:
-			swaladdpool(c, segments[2], segments[3], segments[4]);
-			break;
+		if (numargs >= 1) {
+			w = strtoul(segments[1], NULL, 0);
+			switch (wintoclient2(w, &c, NULL)) {
+			case ClientRegular: /* fallthrough */
+			case ClientSwallowee:
+				swaladdpool(c, segments[2], segments[3], segments[4]);
+				break;
+			}
 		}
 	}
-	else if (!strcmp(segments[0], "swallow")) {
+	else if (!strcmp(segments[0], "swal")) {
+		/* Params: swallower's windowid, swallowee's window-id */
 		Client *swer, *swee;
 		Window winswer, winswee;
 		int typeswer, typeswee;
 
-		/* Params: swallower, swallowee */
-		if (numargs < 2) {
-			return 1;
+		if (numargs >= 2) {
+			winswer = strtoul(segments[1], NULL, 0);
+			typeswer = wintoclient2(winswer, &swer, NULL);
+			winswee = strtoul(segments[2], NULL, 0);
+			typeswee = wintoclient2(winswee, &swee, NULL);
+			if ((typeswer == ClientRegular || typeswer == ClientSwallowee)
+				&& (typeswee == ClientRegular || typeswee == ClientSwallowee))
+				swal(swer, swee, 0);
 		}
-
-		winswer = strtoul(segments[1], NULL, 0);
-		typeswer = wintoclient2(winswer, &swer, NULL);
-		winswee = strtoul(segments[2], NULL, 0);
-		typeswee = wintoclient2(winswee, &swee, NULL);
-		if ((typeswer == ClientRegular || typeswer == ClientSwallowee)
-			&& (typeswee == ClientRegular || typeswee == ClientSwallowee))
-			swal(swer, swee, 0);
-		return 1;
 	}
-
 	return 1;
 }
 
@@ -1849,7 +1839,7 @@ swalrmpool(Swallow *s)
 }
 
 /*
- * Removes swallow queued for a specific client.
+ * If found, removes swallow instance which targets a specific client.
  */
 void
 swalrmpoolbyclient(Client *c)
@@ -2424,15 +2414,13 @@ swal(Client *swer, Client *swee, int manage)
 }
 
 /*
- * Stops active swallow for currently selected client
+ * Stops active swallow for currently selected client.
  */
 void
-swalstopsel(const Arg *arg)
+swalstopsel(const Arg *unused)
 {
 	if (selmon->sel && selmon->sel->swallowedby)
 		swalstop(selmon->sel, NULL);
-
-	// TODO: Add arg to remove all active and queued swallows
 }
 
 void
@@ -2634,7 +2622,7 @@ unmapnotify(XEvent *e)
 }
 
 /*
- * Stop an active swallow of swallowed client 'swee' remapping the swallower.
+ * Stop an active swallow of swallowed client 'swee' and remap the swallower.
  * If 'swee' is a swallower itself 'root' must point the root client of the
  * swallow chain containing 'swee'.
  */

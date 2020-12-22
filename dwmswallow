@@ -26,7 +26,7 @@ if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
 elif [ $# -eq 2 ]; then
 	widswer="$1"
 	widswee="$2"
-	if name="$(printf "${PREFIX}swallow${SEP}%u${SEP}%u" "$widswer" "$widswee")"; then
+	if name="$(printf "${PREFIX}swal${SEP}%u${SEP}%u" "$widswer" "$widswee")"; then
 		xsetroot -name "$name"
 	else
 		usage >&2
@@ -47,7 +47,7 @@ else
 		ii=$((ii + 2))
 	done
 
-	if name="$(printf "${PREFIX}swallowqueue${SEP}%u${SEP}%s${SEP}%s${SEP}%s" "$widswer" "$class" "$instance" "$title")"; then
+	if name="$(printf "${PREFIX}swaladdpool${SEP}%u${SEP}%s${SEP}%s${SEP}%s" "$widswer" "$class" "$instance" "$title")"; then
 		xsetroot -name "$name"
 	else
 		usage >&2
