@@ -2346,6 +2346,7 @@ swal(Client *swer, Client *swee, int manage)
 	Client *c, **pc;
 	Swallow *s;
 	XEvent ev;
+	int sweefocused = selmon->sel == swee;
 
 	/* Remove any swallows queued for the swer. Asking a swallower to swallow
 	 * another window is ambiguous and is thus avoided altogether. In contrast,
@@ -2367,19 +2368,20 @@ swal(Client *swer, Client *swee, int manage)
 	for (pc = &swer->mon->clients; *pc && *pc != swer; pc = &(*pc)->next);
 	*pc = swee;
 	swee->next = swer->next;
-	if (swee->mon == swer->mon && swee->mon->sel == swee) {
-		detachstack(swer);
-		attachstack(swer);
-	}
 	detachstack(swee);
 	for (pc = &swer->mon->stack; *pc && *pc != swer; pc = &(*pc)->snext);
 	*pc = swee;
 	swee->snext = swer->snext;
+	swee->mon = swer->mon;
+	if (sweefocused) {
+		detachstack(swee);
+		attachstack(swee);
+		selmon = swer->mon;
+	}
 
 	/* Copy swer's geometry. If you're using patches which modify window
 	 * geometry add to the code below. */
 	swee->tags = swer->tags;
-	swee->mon = swer->mon;
 	swee->x = swee->oldx = swer->x;
 	swee->y = swee->oldy = swer->y;
 	swee->w = swee->oldw = swer->w;
@@ -2649,6 +2651,7 @@ swalstop(Client *swee, Client *root)
 	swer->mon = root->mon;
 	swer->tags = root->tags;
 	swer->isfloating = 0;
+	swer->x = swer->y = 0; /* applies to floating layout */
 	swer->cfact = 1.0;
 
 	/* Attach swer to client and focus lists after swee. This will reinsert
