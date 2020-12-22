@@ -2377,7 +2377,7 @@ swal(Client *swer, Client *swee, int manage)
 	}
 
 	/* Copy swer's geometry. If you're using patches which modify window
-	 * geometry add to the code below. */
+	 * geometry such as cfacts add to the code below. */
 	swee->tags = swer->tags;
 	swee->x = swee->oldx = swer->x;
 	swee->y = swee->oldy = swer->y;
@@ -2639,8 +2639,9 @@ swalstop(Client *swee, Client *root)
 	root = root ? root : swee;
 
 	/* Configure behavior of swer's window: Use root's monitor, tags and set to
-	 * non-floating. If you're using patches which modify window geometry or
-	 * want to applyrules() to swer's window adjust the code below. */
+	 * non-floating. If you're using patches which modify window geometry such
+	 * as cfacts or want to applyrules() to swer's window adjust the code
+	 * below. */
 	swer->mon = root->mon;
 	swer->tags = root->tags;
 	swer->isfloating = 0;
@@ -3277,3 +3278,8 @@ main(int argc, char *argv[])
 // Questions:
 //  - Killing a client always produces multiple unmap and destroy notifications. Why?
 //  - Killing a client causes an unmap before a destroy. Why?
+
+// swallow showcase:
+// - swallow xeyes
+// - lf opens file
+// - shell opens zathura opens lf to search a file
