@@ -795,8 +795,7 @@ configurerequest(XEvent *e)
 	else {
 		/* No client exists which corresponds to the event's window, in which
 		 * case forward the request verbatim to X. Presumably, this is only the
-		 * case for unmapped windows (whose map request will create a
-		 * corresponding client via manage()).  */
+		 * case for unmapped windows (including swallowers). */
 		wc.x = ev->x;
 		wc.y = ev->y;
 		wc.width = ev->width;
@@ -2379,16 +2378,8 @@ swal(Client *swer, Client *swee, int manage)
 	/* Copy swer's geometry. If you're using patches which modify window
 	 * geometry such as cfacts add to the code below. */
 	swee->tags = swer->tags;
-	swee->x = swee->oldx = swer->x;
-	swee->y = swee->oldy = swer->y;
-	swee->w = swee->oldw = swer->w;
-	swee->h = swee->oldh = swer->h;
 	swee->isfloating = swer->isfloating;
 	swee->cfact = swer->cfact;
-
-	/* ICCCM 4.1.5 (probably; copied from manage().) */
-	if (manage)
-		configure(swee);
 
 	/* Append swer at the end of swee's swallow chain. */
 	for (c = swee; c->swallowedby; c = c->swallowedby);
@@ -2401,7 +2392,7 @@ swal(Client *swer, Client *swee, int manage)
 
 	/* Move/resize swee and raise the window if it's floating or it may be
 	 * covered up. */
-	XMoveResizeWindow(dpy, swee->win, swee->x, swee->y, swee->w, swee->h);
+	resize(swee, swer->x, swer->y, swer->w, swer->h, 0);
 	if (c->isfloating)
 		XRaiseWindow(dpy, c->win);
 
@@ -2645,7 +2636,6 @@ swalstop(Client *swee, Client *root)
 	swer->mon = root->mon;
 	swer->tags = root->tags;
 	swer->isfloating = 0;
-	swer->x = swer->y = 0; /* applies to floating layout only */
 	swer->cfact = 1.0;
 
 	/* Attach swer to client and focus lists after root. This will reinsert
@@ -2657,14 +2647,15 @@ swalstop(Client *swee, Client *root)
 	swer->snext = root->snext;
 	root->snext = swer;
 
-	// TODO: Prune window size
-	// If isfloating or when floating layout is used the window gets
-	// resized according to its geometry fields which may have been
-	// set on a different, much larger screen.
-
-	// TODO: Handle resizing of swallowers (while they're unmapped) for floating layout.
-	// Client geometry does not reflect window size when swalstop() is entered and is
-	// does not get set by arrange() when using floating layouts.
+	if (!root->mon->lt[root->mon->sellt]->arrange) {
+		XRaiseWindow(dpy, swer->win);
+		resize(swer, 0, 0, swee->w, swee->h, 0);
+	} else {
+		/* Hack to guarantee that arrange() recalulates the window's geometry
+		 * and actually calls resizeclient().
+		 * TODO: Specify why exactly this is necessary. */
+		swer->x = -1;
+	}
 
 	/* Draw a normal border for swer's window. If swer was the selected client
 	 * when it swallowed swee its window's border was a drawn using SchemeSel
