@@ -2662,6 +2662,10 @@ swalstop(Client *swee, Client *root)
 	// resized according to its geometry fields which may have been
 	// set on a different, much larger screen.
 
+	// TODO: Handle resizing of swallowers (while they're unmapped) for floating layout.
+	// Client geometry does not reflect window size when swalstop() is entered and is
+	// does not get set by arrange() when using floating layouts.
+
 	/* Draw a normal border for swer's window. If swer was the selected client
 	 * when it swallowed swee its window's border was a drawn using SchemeSel
 	 * and needs to be overridden here. If this step were omitted swer's window
