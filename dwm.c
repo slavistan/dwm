@@ -738,14 +738,15 @@ configurerequest(XEvent *e)
 	XConfigureRequestEvent *ev = &e->xconfigurerequest;
 	XWindowChanges wc;
 
-	if ((c = wintoclient(ev->window))) {
+	switch (wintoclient2(ev->window, &c, NULL)) {
+	case ClientRegular: /* fallthrough */
+	case ClientSwallowee:
 		if (ev->value_mask & CWBorderWidth) {
 			// ???: What makes changing the border width exclusive? Why are
 			// possible other changes ignored if bw is set? Also, does this
 			// actually change the border width?
 			c->bw = ev->border_width;
-		}
-		else if (c->isfloating || !selmon->lt[selmon->sellt]->arrange) {
+		} else if (c->isfloating || !selmon->lt[selmon->sellt]->arrange) {
 			/* If either the window is floating or the current layout does not come
 			 * with an arrange function update the client's geometry fields. */
 			m = c->mon;
@@ -783,16 +784,20 @@ configurerequest(XEvent *e)
 			 * When changing the tag everything will be redrawn anyway. */
 			if (ISVISIBLE(c))
 				XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
-		}
-		else {
+		} else {
 			/* Refuse any move/resize requests for tiled windows. This refusal
 			 * is communicated to the client via a synthetic ConfigureNotify
 			 * event that describes the unchanged geometry of the window. See
 			 * ICCCM 4.1.5. */
 			configure(c);
 		}
-	}
-	else {
+		break;
+	case ClientSwallower:
+		/* Refuse any move/resize requests for swallowers and communicat refusal to
+		 * client via a synthetic ConfigureNotify (ICCCM 4.1.5). */
+		configure(c);
+		break;
+	default:
 		/* No client exists which corresponds to the event's window, in which
 		 * case forward the request verbatim to X. Presumably, this is only the
 		 * case for unmapped windows (including swallowers). */
@@ -804,6 +809,7 @@ configurerequest(XEvent *e)
 		wc.sibling = ev->above;
 		wc.stack_mode = ev->detail;
 		XConfigureWindow(dpy, ev->window, ev->value_mask, &wc);
+		break;
 	}
 	XSync(dpy, False);
 }
@@ -1460,7 +1466,7 @@ manage(Window w, XWindowAttributes *wa)
 
 /*
  * Window configuration and client setup for new windows which are to be
- * swallowed. Pendant to manage().
+ * swallowed immediately. Pendant to manage() for such windows.
  */
 void
 swalmanage(Swallow *s, Window w, XWindowAttributes *wa)
@@ -1487,7 +1493,6 @@ swalmanage(Swallow *s, Window w, XWindowAttributes *wa)
 	XSelectInput(dpy, swee->win, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask);
 	wc.border_width = swee->bw;
 	XConfigureWindow(dpy, swee->win, CWBorderWidth, &wc);
-	XSetWindowBorder(dpy, swee->win, scheme[SchemeNorm][ColBorder].pixel);
 	grabbuttons(swee, 0);
 	XChangeProperty(dpy, root, netatom[NetClientList], XA_WINDOW, 32, PropModeAppend,
 		(unsigned char *) &(swee->win), 1);
@@ -1526,24 +1531,25 @@ maprequest(XEvent *e)
 		return;
 
 	switch (wintoclient2(ev->window, &c, &root)) {
-	/* Regulars and swallowees are always mapped. Nothing to do. */
 	case ClientRegular: /* fallthrough */
 	case ClientSwallowee:
-		return;
-	/* Remapping a swallower will simply stop the swallow. */
+		/* Regulars and swallowees are always mapped. Nothing to do. */
+		break;
 	case ClientSwallower:
+		/* Remapping a swallower will simply stop the swallow. */
 		for (swee = root; swee->swallowedby != c; swee = swee->swallowedby);
 		swalstop(swee, root);
-		return;
+		break;
+	default:
+		/* No client manages the new window. See if any swallow matches. */
+		if (s = swalmatch(ev->window))
+			swalmanage(s, ev->window, &wa);
+		else
+			manage(ev->window, &wa);
+		break;
 	}
 
-	/* No client manages the new window. See if any swallow matches. */
-	if (s = swalmatch(ev->window))
-		swalmanage(s, ev->window, &wa);
-	else
-		manage(ev->window, &wa);
-
-	/* Reduce decay counter of all swallows. */
+	/* Reduce decay counter of all swallow instances in the pool. */
 	if (swaldecay)
 		swaldecayby(1);
 }
@@ -2394,8 +2400,8 @@ swal(Client *swer, Client *swee, int manage)
 	/* Move/resize swee and raise the window if it's floating or it may be
 	 * covered up. */
 	resize(swee, swer->x, swer->y, swer->w, swer->h, 0);
-	if (c->isfloating)
-		XRaiseWindow(dpy, c->win);
+	if (swee->isfloating)
+		XRaiseWindow(dpy, swee->win);
 
 	focus(NULL);
 	arrange(NULL);
@@ -2406,7 +2412,7 @@ swal(Client *swer, Client *swee, int manage)
 }
 
 /*
- * Stops active swallow for currently selected client.
+ * Stop active swallow for currently selected client.
  */
 void
 swalstopsel(const Arg *unused)
@@ -2602,13 +2608,15 @@ unmapnotify(XEvent *e)
 	}
 
 	switch (wintoclient2(ev->window, &c, &root)) {
-	case ClientSwallowee:
-		swalstop(c, NULL); /* fallthrough */
 	case ClientRegular:
 		unmanage(c, 0);
 		break;
-	/* Swallowers are never mapped. Nothing to do. */
+	case ClientSwallowee:
+		swalstop(c, NULL);
+		unmanage(c, 0);
+		break;
 	case ClientSwallower:
+		/* Swallowers are never mapped. Nothing to do. */
 		break;
 	}
 }
@@ -2629,46 +2637,24 @@ swalstop(Client *swee, Client *root)
 
 	swee->swallowedby = NULL;
 	root = root ? root : swee;
-
-	/* Configure behavior of swer's window: Use root's monitor, tags and set to
-	 * non-floating. If you're using patches which modify window geometry such
-	 * as cfacts or want to applyrules() to swer's window adjust the code
-	 * below. */
 	swer->mon = root->mon;
 	swer->tags = root->tags;
-	swer->isfloating = 0;
-	swer->cfact = 1.0;
-
-	/* Attach swer to client and focus lists after root. This will reinsert
-	 * swer's window after root's window if tiling is used and will keep the
-	 * current focus. If you want either of these behaviors to change this is
-	 * the place to do it. */
 	swer->next = root->next;
 	root->next = swer;
 	swer->snext = root->snext;
 	root->snext = swer;
+	swer->isfloating = 0;
 
+	/* Configure geometry params obtained from patches (e.g. cfacts) here. */
+	swer->cfact = 1.0;
+
+	/* Manually configure window for floating layout. */
 	if (!root->mon->lt[root->mon->sellt]->arrange) {
 		XRaiseWindow(dpy, swer->win);
 		resize(swer, swee->mon->wx, swee->mon->wy, swee->w, swee->h, 0);
-	} else {
-		/* Hack to guarantee that arrange() recalulates the window's geometry
-		 * and actually calls resizeclient().
-		 * ConfigureRequests for ClientSwallower clients are not managed by dwm
-		 * and are forwared verbatim to X. Thus the window may be resized/moved
-		 * without knowledge of dwm and the client's geom fields won't reflect its
-		 * true state, and the economical resize() may fail to actually resize
-		 * the window. A proper way to fix this would be to
-		 * TODO: circumvent ConfigureRequests for swallowers.
-		 */
-		swer->x = -1;
 	}
 
-	/* Draw a normal border for swer's window. If swer was the selected client
-	 * when it swallowed swee its window's border was a drawn using SchemeSel
-	 * and needs to be overridden here. If this step were omitted swer's window
-	 * would exhibit a SchemeSel border even if it wasn't the focused client
-	 * after swalstop(). */
+	/* Override swer's border scheme which may be using SchemeSel. */
 	XSetWindowBorder(dpy, swer->win, scheme[SchemeNorm][ColBorder].pixel);
 
 	/* ICCCM 4.1.3.1 */
