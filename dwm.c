@@ -740,9 +740,9 @@ configurerequest(XEvent *e)
 
 	if ((c = wintoclient(ev->window))) {
 		if (ev->value_mask & CWBorderWidth) {
-			// ?? What makes changing the border width exclusive? Why are
+			// ???: What makes changing the border width exclusive? Why are
 			// possible other changes ignored if bw is set? Also, does this
-			// ever do anything to X?
+			// actually change the border width?
 			c->bw = ev->border_width;
 		}
 		else if (c->isfloating || !selmon->lt[selmon->sellt]->arrange) {
@@ -1409,6 +1409,7 @@ manage(Window w, XWindowAttributes *wa)
 	/*
 	 * Prune extents of window. Relevant for floating windows as a tiling layout will
 	 * override the geometry fields via arrange().
+	 * ???: Isn't this only necessary for floating windows or the floating layout?
 	 */
 	if (c->x + WIDTH(c) > c->mon->mx + c->mon->mw)
 		c->x = c->mon->mx + c->mon->mw - WIDTH(c);
@@ -2649,11 +2650,17 @@ swalstop(Client *swee, Client *root)
 
 	if (!root->mon->lt[root->mon->sellt]->arrange) {
 		XRaiseWindow(dpy, swer->win);
-		resize(swer, 0, 0, swee->w, swee->h, 0);
+		resize(swer, swee->mon->wx, swee->mon->wy, swee->w, swee->h, 0);
 	} else {
 		/* Hack to guarantee that arrange() recalulates the window's geometry
 		 * and actually calls resizeclient().
-		 * TODO: Specify why exactly this is necessary. */
+		 * ConfigureRequests for ClientSwallower clients are not managed by dwm
+		 * and are forwared verbatim to X. Thus the window may be resized/moved
+		 * without knowledge of dwm and the client's geom fields won't reflect its
+		 * true state, and the economical resize() may fail to actually resize
+		 * the window. A proper way to fix this would be to
+		 * TODO: circumvent ConfigureRequests for swallowers.
+		 */
 		swer->x = -1;
 	}
 
