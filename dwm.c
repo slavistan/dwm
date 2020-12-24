@@ -2381,27 +2381,22 @@ swal(Client *swer, Client *swee, int manage)
 		attachstack(swee);
 		selmon = swer->mon;
 	}
-
-	/* Copy swer's geometry. If you're using patches which modify window
-	 * geometry such as cfacts add to the code below. */
 	swee->tags = swer->tags;
 	swee->isfloating = swer->isfloating;
-	swee->cfact = swer->cfact;
-
-	/* Append swer at the end of swee's swallow chain. */
 	for (c = swee; c->swallowedby; c = c->swallowedby);
 	c->swallowedby = swer;
+
+	/* Configure geometry params obtained from patches (e.g. cfacts) here. */
+	swee->cfact = swer->cfact;
 
 	/* ICCCM 4.1.3.1 */
 	setclientstate(swer, WithdrawnState);
 	if (manage)
 		setclientstate(swee, NormalState);
 
-	/* Move/resize swee and raise the window if it's floating or it may be
-	 * covered up. */
-	resize(swee, swer->x, swer->y, swer->w, swer->h, 0);
-	if (swee->isfloating)
+	if (swee->isfloating || !swee->mon->lt[swee->mon->sellt]->arrange)
 		XRaiseWindow(dpy, swee->win);
+	resize(swee, swer->x, swer->y, swer->w, swer->h, 0);
 
 	focus(NULL);
 	arrange(NULL);
@@ -2417,7 +2412,7 @@ swal(Client *swer, Client *swee, int manage)
 void
 swalstopsel(const Arg *unused)
 {
-	if (selmon->sel && selmon->sel->swallowedby)
+	if (selmon->sel)
 		swalstop(selmon->sel, NULL);
 }
 
