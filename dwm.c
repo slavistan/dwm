@@ -2826,8 +2826,8 @@ updatesizehints(Client *c)
 	long msize;
 	XSizeHints size;
 
+	/* size is uninitialized, ensure that size.flags aren't used */
 	if (!XGetWMNormalHints(dpy, c->win, &size, &msize))
-		/* size is uninitialized, ensure that size.flags aren't used */
 		size.flags = PSize;
 
 	/* XPM 3.2.8: base_width/base_height takes priority over
