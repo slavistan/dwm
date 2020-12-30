@@ -2347,8 +2347,6 @@ void
 swal(Client *swer, Client *swee, int manage)
 {
 	Client *c, **pc;
-	Swallow *s;
-	XEvent ev;
 	int sweefocused = selmon->sel == swee;
 
 	/* Remove any swallows queued for the swer. Asking a swallower to swallow
