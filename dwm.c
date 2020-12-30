@@ -1541,7 +1541,7 @@ maprequest(XEvent *e)
 		swalstop(swee, root);
 		break;
 	default:
-		/* No client manages the new window. See if any swallow matches. */
+		/* No client is managing the new window. See if any swallows match. */
 		if (s = swalmatch(ev->window))
 			swalmanage(s, ev->window, &wa);
 		else
