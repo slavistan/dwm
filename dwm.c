@@ -951,7 +951,7 @@ drawbar(Monitor *m)
 	drw_setscheme(drw, scheme[SchemeNorm]);
 	x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
 
-	/* Draw swalsymbol next to lysymbol. */
+	/* Draw swalsymbol next to ltsymbol. */
 	if (m->sel && m->sel->swallowedby) {
 		w = TEXTW(swalsymbol);
 		x = drw_text(drw, x, 0, w, bh, lrpad / 2, swalsymbol, 0);
