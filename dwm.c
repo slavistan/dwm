@@ -3257,8 +3257,3 @@ main(int argc, char *argv[])
 // Questions:
 //  - Killing a client always produces multiple unmap and destroy notifications. Why?
 //  - Killing a client causes an unmap before a destroy. Why?
-
-// swallow showcase:
-// - swallow xeyes
-// - lf opens file
-// - shell opens zathura opens lf to search a file
