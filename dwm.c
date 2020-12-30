@@ -1337,9 +1337,9 @@ swaldecayby(int decayby)
 /*
  * Create a swallow instance targeting client 'c' and add it to the pool.
  * 'class', 'inst' and 'title' shall point null-terminated strings or be NULL,
- * implying a wildcard. If 'c' corresponds to an existing swallow, the
- * swallow's filters are updated and no new swallow instance is created.
- * 'c' may be regular or swallowee. Complement to swalrmpool().
+ * implying a wildcard. If an existing swallow instance targets 'c' its filters
+ * are updated and no new swallow instance is created. 'c' may be regular or
+ * swallowee. Complement to swalrmpool().
  */
 void
 swaladdpool(Client *c, const char *class, const char *inst, const char *title)
