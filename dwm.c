@@ -2590,7 +2590,7 @@ void
 unmapnotify(XEvent *e)
 {
 
-	Client *c, *swee, *root;
+	Client *c;
 	XUnmapEvent *ev = &e->xunmap;
 
 	if (ev->send_event) {
