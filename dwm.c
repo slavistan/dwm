@@ -1471,7 +1471,7 @@ manage(Window w, XWindowAttributes *wa)
 void
 swalmanage(Swallow *s, Window w, XWindowAttributes *wa)
 {
-	Client *swee, *swer, **pc;
+	Client *swee, *swer;
 	XWindowChanges wc;
 
 	swer = s->client;
