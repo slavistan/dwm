@@ -2555,7 +2555,6 @@ unfocus(Client *c, int setfocus)
 void
 unmanage(Client *c, int destroyed)
 {
-	Client *swer;
 	XWindowChanges wc;
 	Monitor *m = c->mon;
 
