@@ -835,7 +835,7 @@ createmon(void)
 void
 destroynotify(XEvent *e)
 {
-	Client *c, *pred, *root;
+	Client *c, *swee, *root;
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
 
 	switch (wintoclient2(ev->window, &c, &root)) {
@@ -850,8 +850,8 @@ destroynotify(XEvent *e)
 		swalstop(c, root);
 
 		/* Cut off the swallow chain before the client. */
-		for (pred = root; pred->swallowedby != c; pred = pred->swallowedby);
-		pred->swallowedby = NULL;
+		for (swee = root; swee->swallowedby != c; swee = swee->swallowedby);
+		swee->swallowedby = NULL;
 
 		free(c);
 		updateclientlist();
