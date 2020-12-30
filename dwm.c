@@ -2622,7 +2622,6 @@ void
 swalstop(Client *swee, Client *root)
 {
 	Client *swer;
-	XEvent ev;
 
 	if (!swee || !(swer = swee->swallowedby))
 		return;
