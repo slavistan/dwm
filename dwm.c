@@ -2592,14 +2592,14 @@ unmapnotify(XEvent *e)
 
 	Client *c;
 	XUnmapEvent *ev = &e->xunmap;
+	int type;
 
-	if (ev->send_event) {
-		/* ICCCM 4.1.4 */
+	type = wintoclient2(ev->window, &c, NULL);
+	if (type && ev->send_event) {
 		setclientstate(c, WithdrawnState);
 		return;
 	}
-
-	switch (wintoclient2(ev->window, &c, &root)) {
+	switch (type) {
 	case ClientRegular:
 		unmanage(c, 0);
 		break;
