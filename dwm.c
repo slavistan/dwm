@@ -2558,7 +2558,7 @@ unmanage(Client *c, int destroyed)
 	XWindowChanges wc;
 	Monitor *m = c->mon;
 
-	/* Remove all swallow instances from the pool pertaining to the client. */
+	/* Remove all swallow instances targeting client. */
 	swalrmpoolbyclient(c);
 
 	/* Remove client from lists */
