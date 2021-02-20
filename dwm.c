@@ -1060,6 +1060,29 @@ fakesignal(void)
 				swal(swer, swee, 0);
 		}
 	}
+	else if (!strcmp(segments[0], "swalrmpoolbyclient")) {
+		/* Params: swallower's windowid */
+		Client *swer;
+		Window winswer;
+
+		if (numargs == 1) {
+			winswer = strtoul(segments[1], NULL, 0);
+			if ((swer = wintoclient(winswer)))
+				swalrmpoolbyclient(swer);
+		}
+	}
+	else if (!strcmp(segments[0], "swalstop")) {
+		/* Params: swallowee's windowid */
+		Client *swee;
+		Window winswee;
+		int typeswee;
+
+		if (numargs == 1) {
+			winswee = strtoul(segments[1], NULL, 0);
+			if ((swee = wintoclient(winswee)))
+				swalstop(swee, NULL);
+		}
+	}
 	return 1;
 }
 
@@ -2405,6 +2428,49 @@ swal(Client *swer, Client *swee, int manage)
 }
 
 /*
+ * Stop an active swallow of swallowed client 'swee' and remap the swallower.
+ * If 'swee' is a swallower itself 'root' must point the root client of the
+ * swallow chain containing 'swee'.
+ */
+void
+swalstop(Client *swee, Client *root)
+{
+	Client *swer;
+
+	if (!swee || !(swer = swee->swallowedby))
+		return;
+
+	swee->swallowedby = NULL;
+	root = root ? root : swee;
+	swer->mon = root->mon;
+	swer->tags = root->tags;
+	swer->next = root->next;
+	root->next = swer;
+	swer->snext = root->snext;
+	root->snext = swer;
+	swer->isfloating = swee->isfloating;
+
+	/* Configure geometry params obtained from patches (e.g. cfacts) here. */
+	swer->cfact = 1.0;
+
+	/* If swer is not in tiling mode reuse swee's geometry. */
+	if (swer->isfloating || !root->mon->lt[root->mon->sellt]->arrange) {
+		XRaiseWindow(dpy, swer->win);
+		resize(swer, swee->x, swee->y, swee->w, swee->h, 0);
+	}
+
+	/* Override swer's border scheme which may be using SchemeSel. */
+	XSetWindowBorder(dpy, swer->win, scheme[SchemeNorm][ColBorder].pixel);
+
+	/* ICCCM 4.1.3.1 */
+	setclientstate(swer, NormalState);
+
+	XMapWindow(dpy, swer->win);
+	focus(NULL);
+	arrange(swer->mon);
+}
+
+/*
  * Stop active swallow for currently selected client.
  */
 void
@@ -2611,49 +2677,6 @@ unmapnotify(XEvent *e)
 		/* Swallowers are never mapped. Nothing to do. */
 		break;
 	}
-}
-
-/*
- * Stop an active swallow of swallowed client 'swee' and remap the swallower.
- * If 'swee' is a swallower itself 'root' must point the root client of the
- * swallow chain containing 'swee'.
- */
-void
-swalstop(Client *swee, Client *root)
-{
-	Client *swer;
-
-	if (!swee || !(swer = swee->swallowedby))
-		return;
-
-	swee->swallowedby = NULL;
-	root = root ? root : swee;
-	swer->mon = root->mon;
-	swer->tags = root->tags;
-	swer->next = root->next;
-	root->next = swer;
-	swer->snext = root->snext;
-	root->snext = swer;
-	swer->isfloating = swee->isfloating;
-
-	/* Configure geometry params obtained from patches (e.g. cfacts) here. */
-	swer->cfact = 1.0;
-
-	/* If swer is not in tiling mode reuse swee's geometry. */
-	if (swer->isfloating || !root->mon->lt[root->mon->sellt]->arrange) {
-		XRaiseWindow(dpy, swer->win);
-		resize(swer, swee->x, swee->y, swee->w, swee->h, 0);
-	}
-
-	/* Override swer's border scheme which may be using SchemeSel. */
-	XSetWindowBorder(dpy, swer->win, scheme[SchemeNorm][ColBorder].pixel);
-
-	/* ICCCM 4.1.3.1 */
-	setclientstate(swer, NormalState);
-
-	XMapWindow(dpy, swer->win);
-	focus(NULL);
-	arrange(swer->mon);
 }
 
 void
@@ -2890,13 +2913,18 @@ updatetitle(Client *c)
 		return;
 	}
 
-	/* Display window class instead of lengthy name as window's title */
+	/* Display window class instead of lengthy name as window's title.
+	 * NOTE that the window title is only ever updated between map/unmap cycles
+	 * (as per X11 protocol). Hence there's no need to call updatetitle() each
+	 * time the window title propery changes. For the sake of compatibility,
+	 * however, we'll leave this implementation to resemble original dwm. */
 	strncpy(c->name, ch.res_class, sizeof(c->name) - 1);
 	if (ch.res_class)
 		XFree(ch.res_class);
 	if (ch.res_name)
 		XFree(ch.res_name);
 }
+
 
 void
 updatewindowtype(Client *c)
