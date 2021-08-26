@@ -4,13 +4,15 @@
 
 MYPATH=${0:A:h}
 
+DBG_DISPLAY=:4
+
 errln() { echo "\033[31;1m[ERR ]\033[0m $@"; }
 logln() { echo "\033[32;1m[INFO]\033[0m $@"; }
 die() { echo "$@"; exit 1; }
 
 _launch_dwm() {
 	killdwm
-	export DISPLAY=:4
+	export DISPLAY=$DBG_DISPLAY
 	"$MYPATH/../build/dwm" &
 }
 
@@ -37,7 +39,7 @@ _kill_clients() {
 _launch_xephyr() {
 	DISPLAY=:0 Xephyr +xinerama +extension RANDR \
 		-screen 1680x1050 \
-		-ac -resizeable :4 &
+		-ac -resizeable $DBG_DISPLAY &
 }
 
 # Setup virtual monitors inside Xephyr
