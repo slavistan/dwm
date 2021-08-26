@@ -2582,11 +2582,7 @@ toggleprotected(const Arg *arg) {
 	if (!selmon->sel)
 		return;
 	selmon->sel->isprotected = selmon->sel->isprotected ? 0 : 1;
-	
-	// ???: Why is the bar updated without a call to drawbar()?
-	//      The lock symbol is drawn when the hotkey to toggle protection is
-	//      pressed, although no call to drawbar() is made here. What's reason
-	//      for this behavior?
+	drawbar(selmon);
 }
 
 void
