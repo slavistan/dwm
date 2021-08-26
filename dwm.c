@@ -663,14 +663,30 @@ clientmessage(XEvent *e)
 	if (!c)
 		return;
 	if (cme->message_type == netatom[NetWMState]) {
-		if (cme->data.l[1] == netatom[NetWMFullscreen] || cme->data.l[2] == netatom[NetWMFullscreen])
+		if (cme->data.l[1] == netatom[NetWMFullscreen] || cme->data.l[2] == netatom[NetWMFullscreen]) {
 			/* _NET_WMSTATE_ADD || _NET_WM_STATE_TOGGLE */
 			setfullscreen(c, (cme->data.l[0] == 1 || (cme->data.l[0] == 2 && !c->isfullscreen)));
+		}
 	} else if (cme->message_type == netatom[NetActiveWindow]) {
+		/* XPM: A client can send a _NET_ACTIVE_WINDOW message to the root
+		 *      window in order to activate another window. Upon reception
+		 *      of such a message we switch focus to the window. */
+
+		/* Find first tag which matches window. */
 		for (i = 0; i < LENGTH(tags) && !((1 << i) & c->tags); i++);
+
 		if (i < LENGTH(tags)) {
-			const Arg a = {.ui = 1 << i};
-			view(&a);
+			/* Select the correct monitor if necessary. */
+			if (c->mon != selmon) {
+				unfocus(selmon->sel, 0);
+				selmon = c->mon;
+			}
+
+			/* If the window is not visible we view() the first of its tags.
+			 * Otherwise we leave the view intact. */
+			if (!ISVISIBLE(c)) { const Arg a = {.ui = 1 << i};
+			view(&a); }
+
 			focus(c);
 			restack(selmon);
 		}
@@ -1980,7 +1996,7 @@ resizemouse(const Arg *arg)
 void
 restack(Monitor *m)
 {
-	// When does is become necessary to restack?
+	// ???: When does is become necessary to restack?
 	Client *c;
 	XEvent ev;
 	XWindowChanges wc;
