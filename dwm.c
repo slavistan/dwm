@@ -100,7 +100,7 @@ struct Client {
 	int basew, baseh, incw, inch, maxw, maxh, minw, minh; /* size hints */
 	int bw, oldbw; /* border width */
 	unsigned int tags; /* tag set (bit flags) */
-	int isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen;
+	int isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen, isprotected;
 	Client *next; /* next client in list */
 	Client *snext; /* next client in focus stack */
 	Client *swallowedby; /* client hidden behind me */
@@ -148,6 +148,7 @@ typedef struct {
 	const char *title;
 	unsigned int tags;
 	int isfloating;
+	int isprotected;
 	int monitor;
 } Rule;
 
@@ -228,7 +229,6 @@ static void resizeclient(Client *c, int x, int y, int w, int h);
 static void resizemouse(const Arg *arg);
 static void restack(Monitor *m);
 static void run(void);
-static void runstartup(void);
 static void scan(void);
 static int sendevent(Client *c, Atom proto);
 static void sendmon(Client *c, Monitor *m);
@@ -262,6 +262,7 @@ static void tagmon(const Arg *arg);
 static void tile(Monitor *);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
+static void toggleprotected(const Arg *arg);
 static void toggletag(const Arg *arg);
 static void toggleview(const Arg *arg);
 static void unfocus(Client *c, int setfocus);
@@ -366,6 +367,7 @@ applyrules(Client *c)
 		{
 			c->isfloating = r->isfloating;
 			c->tags |= r->tags;
+			c->isprotected = r->isprotected;
 			for (m = mons; m && m->num != r->monitor; m = m->next);
 			if (m)
 				c->mon = m;
@@ -956,6 +958,12 @@ drawbar(Monitor *m)
 		w = TEXTW(swalsymbol);
 		x = drw_text(drw, x, 0, w, bh, lrpad / 2, swalsymbol, 0);
 	}
+	
+	/* Draw symbol for protected windows. */
+	if (m->sel && m->sel->isprotected) {
+		w = TEXTW(protectedsymbol);
+		x = drw_text(drw, x, 0, w, bh, lrpad / 2, protectedsymbol, 0);
+	}
 
 	if ((w = m->ww - sw - x) > bh) { // larger than bar height? the fuck?
 		if (m->sel) {
@@ -1321,7 +1329,7 @@ keypress(XEvent *e)
 void
 killclient(const Arg *arg)
 {
-	if (!selmon->sel)
+	if (!selmon->sel || selmon->sel->isprotected)
 		return;
 	/* If the client does not participate in the WM_DELETE_WINDOW protocol
 	 * perform a default execution, otherwise send it the corresponding event.
@@ -2013,13 +2021,6 @@ run(void)
 }
 
 void
-runstartup(void)
-{
-  system("~/.config/dwm/autostart-blocking.sh");
-  system("~/.config/dwm/autostart.sh &");
-}
-
-void
 scan(void)
 {
 	unsigned int i, num;
@@ -2567,15 +2568,25 @@ togglebar(const Arg *arg)
 void
 togglefloating(const Arg *arg)
 {
-	if (!selmon->sel)
-		return;
-	if (selmon->sel->isfullscreen) /* no support for fullscreen windows */
+	if (!selmon->sel || selmon->sel->isfullscreen)
 		return;
 	selmon->sel->isfloating = !selmon->sel->isfloating || selmon->sel->isfixed;
 	if (selmon->sel->isfloating)
 		resize(selmon->sel, selmon->sel->x, selmon->sel->y,
 			selmon->sel->w, selmon->sel->h, 0);
 	arrange(selmon);
+}
+
+void
+toggleprotected(const Arg *arg) {
+	if (!selmon->sel)
+		return;
+	selmon->sel->isprotected = selmon->sel->isprotected ? 0 : 1;
+	
+	// ???: Why is the bar updated without a call to drawbar()?
+	//      The lock symbol is drawn when the hotkey to toggle protection is
+	//      pressed, although no call to drawbar() is made here. What's reason
+	//      for this behavior?
 }
 
 void
@@ -3181,7 +3192,6 @@ main(int argc, char *argv[])
 		die("pledge");
 #endif /* __OpenBSD__ */
 	scan(); /* load existing windows */
-	runstartup();
 	run();
 	if(restart) execvp(argv[0], argv);
 	cleanup();
@@ -3285,3 +3295,5 @@ main(int argc, char *argv[])
 // Questions:
 //  - Killing a client always produces multiple unmap and destroy notifications. Why?
 //  - Killing a client causes an unmap before a destroy. Why?
+// TODO: dwmswallow installation is broken (does not exist?)
+// TODO: mod+`: Switch to empty tag (shortcut for scratchpad)

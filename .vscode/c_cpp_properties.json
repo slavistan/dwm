@@ -6,7 +6,7 @@
                 "${workspaceFolder}/**"
             ],
             "defines": [],
-            "compilerPath": "/usr/bin/clang-11",
+            "compilerPath": "/usr/bin/clang-12",
             "compileCommands": "${workspaceFolder}/build/compile_commands.json",
             "compilerArgs": [],
             "cStandard": "c11",

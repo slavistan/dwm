@@ -57,7 +57,6 @@ _launch_setup() {
 
 	xrandr --setmonitor default-1 $w1/0x$h/0+0+0 default >/dev/null 2>&1
 	xrandr --setmonitor default-2 $w2/0x$h/0+$w1+0 none >/dev/null 2>&1
-	feh --bg-scale ~/dat/img/wall
 }
 
 _ls() {
