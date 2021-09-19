@@ -3309,3 +3309,5 @@ main(int argc, char *argv[])
 //  - Killing a client causes an unmap before a destroy. Why?
 // TODO: dwmswallow installation is broken (does not exist?)
 // TODO: mod+`: Switch to empty tag (shortcut for scratchpad)
+// TODO: Move all windows in view to some other tag/window
+// TODO: Fix currently held focus

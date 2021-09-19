@@ -4,8 +4,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 set(CMAKE_DISABLE_SOURCE_CHANGES on)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD on)
 
-project(dwm
-    VERSION 6.2.0
+project(dwm VERSION 6.2.0
     LANGUAGES C)
 
 find_package(X11 REQUIRED)
@@ -31,8 +30,7 @@ target_compile_definitions(dwm
     PRIVATE VERSION="${CMAKE_PROJECT_VERSION}")
 
 install(TARGETS dwm DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-
-# TODO: Install dwmswallow
+install(FILES "${PROJECT_SOURCE_DIR}/dwmswallow" DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 
 ###
 ### CMake options
@@ -42,3 +40,7 @@ option(XSYNCHRONIZE "Use X synchronous mode (debugging)" OFF)
 if(XSYNCHRONIZE)
     target_compile_definitions(dwm PUBLIC XSYNCHRONIZE)
 endif()
+
+# TODO: Read version from PKGBUILD
+# TODO: Add all dependencies to cmake
+# TODO: Add make target for development (symlink instead of installs)
