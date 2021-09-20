@@ -30,7 +30,8 @@ target_compile_definitions(dwm
     PRIVATE VERSION="${CMAKE_PROJECT_VERSION}")
 
 install(TARGETS dwm DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-install(FILES "${PROJECT_SOURCE_DIR}/dwmswallow" DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/dwmswallow"
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 
 ###
 ### CMake options
@@ -41,6 +42,5 @@ if(XSYNCHRONIZE)
     target_compile_definitions(dwm PUBLIC XSYNCHRONIZE)
 endif()
 
-# TODO: Read version from PKGBUILD
 # TODO: Add all dependencies to cmake
 # TODO: Add make target for development (symlink instead of installs)
