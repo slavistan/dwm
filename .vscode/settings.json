@@ -43,6 +43,7 @@
         "utility": "c",
         "vector": "c",
         "system_error": "c",
-        "*.inc": "c"
+        "*.inc": "c",
+        "util.h": "c"
     }
 }

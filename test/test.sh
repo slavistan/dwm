@@ -11,7 +11,7 @@ logln() { echo "\033[32;1m[INFO]\033[0m $@"; }
 die() { echo "$@"; exit 1; }
 
 _launch_dwm() {
-	killdwm
+	_kill_dwm
 	export DISPLAY=$DBG_DISPLAY
 	"$MYPATH/../build/dwm" &
 }
