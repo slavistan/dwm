@@ -73,6 +73,7 @@ enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms *
 enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle,
        ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
 enum { ClientRegular = 1, ClientSwallowee, ClientSwallower }; /* client types wrt. swallowing */
+enum { ActionSet, ActionUnset, ActionToggle }; /* binary state changes */
 
 typedef union {
 	int i;
@@ -100,7 +101,7 @@ struct Client {
 	int basew, baseh, incw, inch, maxw, maxh, minw, minh; /* size hints */
 	int bw, oldbw; /* border width */
 	unsigned int tags; /* tag set (bit flags) */
-	int isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen, isprotected;
+	int isfixed, isfloating, isurgent, neverfocus, oldstate, iscovertfullscreen, isfakefullscreen, isprotected;
 	Client *next; /* next client in list */
 	Client *snext; /* next client in focus stack */
 	Client *swallowedby; /* client hidden behind me */
@@ -234,7 +235,8 @@ static int sendevent(Client *c, Atom proto);
 static void sendmon(Client *c, Monitor *m);
 static void setclientstate(Client *c, long state);
 static void setfocus(Client *c);
-static void setfullscreen(Client *c, int fullscreen);
+static void fakefullscreen(Client *c, int fullscreen);
+static void covertfullscreen(Client *c, int fullscreen);
 static void setgaps(const Arg *arg);
 static void setlayout(const Arg *arg);
 static void setcfact(const Arg *arg);
@@ -262,7 +264,8 @@ static void tagmon(const Arg *arg);
 static void tile(Monitor *);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
-static void toggleprotected(const Arg *arg);
+static void toggleprotected(const Arg *unused);
+static void togglecovertfullscreen(const Arg *unused);
 static void toggletag(const Arg *arg);
 static void toggleview(const Arg *arg);
 static void unfocus(Client *c, int setfocus);
@@ -663,9 +666,11 @@ clientmessage(XEvent *e)
 	if (!c)
 		return;
 	if (cme->message_type == netatom[NetWMState]) {
+		/* This message type allows two properties to be changed simultaneously. Check both "slots". */
 		if (cme->data.l[1] == netatom[NetWMFullscreen] || cme->data.l[2] == netatom[NetWMFullscreen]) {
 			/* _NET_WMSTATE_ADD || _NET_WM_STATE_TOGGLE */
-			setfullscreen(c, (cme->data.l[0] == 1 || (cme->data.l[0] == 2 && !c->isfullscreen)));
+			fakefullscreen(c, (cme->data.l[0] == 1 /* _NET_WMSTATE_ADD */ ||
+				(cme->data.l[0] == 2 /* _NET_WMSTATE_TOGGLE */)));
 		}
 	} else if (cme->message_type == netatom[NetActiveWindow]) {
 		/* XPM: A client can send a _NET_ACTIVE_WINDOW message to the root
@@ -733,9 +738,9 @@ configurenotify(XEvent *e)
 			drw_resize(drw, sw, bh);
 			updatebars();
 			for (m = mons; m; m = m->next) {
-				for (c = m->clients; c; c = c->next)
-					if (c->isfullscreen)
-						resizeclient(c, m->mx, m->my, m->mw, m->mh);
+//				for (c = m->clients; c; c = c->next)
+//					if (c->isfullscreen)
+//						resizeclient(c, m->mx, m->my, m->mw, m->mh);
 				XMoveResizeWindow(dpy, m->barwin, m->wx, m->by, m->ww, bh);
 			}
 			focus(NULL);
@@ -968,17 +973,26 @@ drawbar(Monitor *m)
 	drw_setscheme(drw, scheme[SchemeNorm]);
 	x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
 
-	/* Draw swalsymbol next to ltsymbol. */
-	if (m->sel && m->sel->swallowedby) {
-		w = TEXTW(swalsymbol);
-		x = drw_text(drw, x, 0, w, bh, lrpad / 2, swalsymbol, 0);
+	/* Draw status symbols next to ltsymbol. */
+	if (m->sel) {
+		if (m->sel->swallowedby) {
+			w = TEXTW(swalsymbol);
+			x = drw_text(drw, x, 0, w, bh, lrpad / 2, swalsymbol, 0);
+		}
+
+		if (m->sel->isprotected) {
+			w = TEXTW(protectedsymbol);
+			x = drw_text(drw, x, 0, w, bh, lrpad / 2, protectedsymbol, 0);
+		}
+		
+		if (m->sel->isfakefullscreen) {
+			w = TEXTW(fakefullscreensymbol);
+			x = drw_text(drw, x, 0, w, bh, lrpad / 2, fakefullscreensymbol, 0);
+		}
 	}
 	
 	/* Draw symbol for protected windows. */
-	if (m->sel && m->sel->isprotected) {
-		w = TEXTW(protectedsymbol);
-		x = drw_text(drw, x, 0, w, bh, lrpad / 2, protectedsymbol, 0);
-	}
+	
 
 	if ((w = m->ww - sw - x) > bh) { // larger than bar height? the fuck?
 		if (m->sel) {
@@ -1640,8 +1654,9 @@ movemouse(const Arg *arg)
 
 	if (!(c = selmon->sel))
 		return;
-	if (c->isfullscreen) /* no support moving fullscreen windows by mouse */
+	if (c->iscovertfullscreen) /* don't move fullscreen windows. */
 		return;
+
 	restack(selmon);
 	ocx = c->x;
 	ocy = c->y;
@@ -1943,8 +1958,8 @@ resizemouse(const Arg *arg)
 
 	if (!(c = selmon->sel))
 		return;
-	if (c->isfullscreen) /* no support resizing fullscreen windows by mouse */
-		return;
+//	if (c->isfullscreen) /* no support resizing fullscreen windows by mouse */
+//		return;
 	restack(selmon);
 	ocx = c->x;
 	ocy = c->y;
@@ -2134,31 +2149,60 @@ setfocus(Client *c)
 	sendevent(c, wmatom[WMTakeFocus]);
 }
 
+/*
+ * Sends a client message pretending to fullscreen a window, but no resize is
+ * performed. Take that, Youtube.
+ */
 void
-setfullscreen(Client *c, int fullscreen)
+fakefullscreen(Client *c, int fullscreen)
 {
-	if (fullscreen && !c->isfullscreen) {
+	if (fullscreen && !c->isfakefullscreen) {
 		XChangeProperty(dpy, c->win, netatom[NetWMState], XA_ATOM, 32,
 			PropModeReplace, (unsigned char*)&netatom[NetWMFullscreen], 1);
-		c->isfullscreen = 1;
-		c->oldstate = c->isfloating;
-		c->oldbw = c->bw;
-		c->bw = 0;
-		c->isfloating = 1;
-		resizeclient(c, c->mon->mx, c->mon->my, c->mon->mw, c->mon->mh);
-		XRaiseWindow(dpy, c->win);
-	} else if (!fullscreen && c->isfullscreen) {
+		c->isfakefullscreen = 1;
+	} else if (!fullscreen && c->isfakefullscreen) {
 		XChangeProperty(dpy, c->win, netatom[NetWMState], XA_ATOM, 32,
 			PropModeReplace, (unsigned char*)0, 0);
-		c->isfullscreen = 0;
-		c->isfloating = c->oldstate;
-		c->bw = c->oldbw;
-		c->x = c->oldx;
-		c->y = c->oldy;
-		c->w = c->oldw;
-		c->h = c->oldh;
-		resizeclient(c, c->x, c->y, c->w, c->h);
-		arrange(c->mon);
+		c->isfakefullscreen = 0;
+	}
+	drawbar(c->mon);
+}
+
+/*
+ * Make a window fullscreen without informing the client.
+ */
+void
+covertfullscreen(Client *c, int action)
+{
+	if (action == ActionSet) {
+		if (!c->iscovertfullscreen) {
+			c->iscovertfullscreen = 1;
+			c->oldstate = c->isfloating;
+			c->oldbw = c->bw;
+			c->bw = 0;
+			c->isfloating = 1;
+			resizeclient(c, c->mon->mx, c->mon->my, c->mon->mw, c->mon->mh);
+			XRaiseWindow(dpy, c->win);
+		}
+	}
+	else if (action == ActionUnset) {
+		if (c->iscovertfullscreen) {
+			c->iscovertfullscreen = 0;
+			c->isfloating = c->oldstate;
+			c->bw = c->oldbw;
+			c->x = c->oldx;
+			c->y = c->oldy;
+			c->w = c->oldw;
+			c->h = c->oldh;
+			resizeclient(c, c->x, c->y, c->w, c->h);
+			arrange(c->mon);
+		}
+	} else {
+		if (c->iscovertfullscreen) {
+			covertfullscreen(c, ActionUnset);
+		} else {
+			covertfullscreen(c, ActionSet);
+		}
 	}
 }
 
@@ -2331,7 +2375,7 @@ showhide(Client *c)
 	if (ISVISIBLE(c)) {
 		/* show clients top down */
 		XMoveWindow(dpy, c->win, c->x, c->y);
-		if ((!c->mon->lt[c->mon->sellt]->arrange || c->isfloating) && !c->isfullscreen)
+		if (!c->mon->lt[c->mon->sellt]->arrange || c->isfloating)
 			resize(c, c->x, c->y, c->w, c->h, 0);
 		showhide(c->snext);
 	} else {
@@ -2394,12 +2438,6 @@ swal(Client *swer, Client *swee, int manage)
 	 * head of the swallow chain. */
 	if (!manage)
 		swalrmpoolbyclient(swer);
-
-	/* Disable fullscreen prior to swallow. Swallows involving fullscreen
-	 * windows produces quirky artefacts such as fullscreen terminals or tiled
-	 * pseudo-fullscreen windows. */
-	setfullscreen(swer, 0);
-	setfullscreen(swee, 0);
 
 	/* Swap swallowee into client and focus lists. Keeps current focus unless
 	 * the swer (which gets unmapped) is focused in which case the swee will
@@ -2583,7 +2621,7 @@ togglebar(const Arg *arg)
 void
 togglefloating(const Arg *arg)
 {
-	if (!selmon->sel || selmon->sel->isfullscreen)
+	if (!selmon->sel)
 		return;
 	selmon->sel->isfloating = !selmon->sel->isfloating || selmon->sel->isfixed;
 	if (selmon->sel->isfloating)
@@ -2593,11 +2631,18 @@ togglefloating(const Arg *arg)
 }
 
 void
-toggleprotected(const Arg *arg) {
+toggleprotected(const Arg *unused) {
 	if (!selmon->sel)
 		return;
 	selmon->sel->isprotected = selmon->sel->isprotected ? 0 : 1;
 	drawbar(selmon);
+}
+
+void
+togglecovertfullscreen(const Arg *unused) {
+	if (!selmon->sel)
+		return;
+	covertfullscreen(selmon->sel, ActionToggle);
 }
 
 void
@@ -2955,7 +3000,7 @@ updatewindowtype(Client *c)
 	Atom wtype = getatomprop(c, netatom[NetWMWindowType]);
 
 	if (state == netatom[NetWMFullscreen])
-		setfullscreen(c, 1);
+		fakefullscreen(c, 1);
 	if (wtype == netatom[NetWMWindowTypeDialog])
 		c->isfloating = 1;
 }

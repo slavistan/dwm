@@ -49,6 +49,9 @@ static const char swalsymbol[] = "👅";
 /* window protection */
 static const char protectedsymbol[] = "🔒";
 
+/* fake fullscreen */
+static const char fakefullscreensymbol[] = "⛶";
+
 /* layout(s) */
 static const float mfact     = 0.55; /* factor of master area size [0.05..0.95] */
 static const int nmaster     = 1;    /* number of clients in master area */
@@ -95,7 +98,7 @@ static Key keys[] = {
 	{ MODKEY                       , XK_minus  , setcfact        , {.f = -0.25} }       ,
 	{ MODKEY|ShiftMask             , XK_equal  , setcfact        , {.f = +0.25} }       ,
 	{ MODKEY                       , XK_t      , setlayout       , {.v = &layouts[0]} } ,
-	{ MODKEY                       , XK_f      , setlayout       , {.v = &layouts[1]} } ,
+	{ MODKEY                       , XK_f      , togglecovertfullscreen, {0} } ,
 	{ MODKEY                       , XK_m      , setlayout       , {.v = &layouts[2]} } ,
 	{ MODKEY                       , XK_space  , setlayout       , {0} }                ,
 	{ MODKEY|ShiftMask             , XK_t      , toggleprotected , {0} }                ,
