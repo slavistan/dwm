@@ -32,6 +32,8 @@ target_compile_definitions(dwm
 install(TARGETS dwm DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/dwmswallow"
     DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/dwmquit"
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 
 ###
 ### CMake options
