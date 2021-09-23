@@ -39,6 +39,7 @@ static const Rule rules[] = {
 	{ "Gimp"            , NULL      , NULL  , 0         , 1          , 0           , -1 }       ,
 	{ "st-256color"     , "st-wiki" , NULL  , (1 << 8)  , 0          , 0           , -1 }       ,
 	{ "Microsoft Teams" , NULL      , NULL  , (1 << 7)  , 0          , 0           , -1 }       ,
+	{ "eww"             , NULL      , NULL  , (1 << 3)  , 1          , 0           , -1 }
  };
 
 /* window swallowing */

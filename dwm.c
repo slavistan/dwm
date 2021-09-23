@@ -738,9 +738,9 @@ configurenotify(XEvent *e)
 			drw_resize(drw, sw, bh);
 			updatebars();
 			for (m = mons; m; m = m->next) {
-//				for (c = m->clients; c; c = c->next)
-//					if (c->isfullscreen)
-//						resizeclient(c, m->mx, m->my, m->mw, m->mh);
+				for (c = m->clients; c; c = c->next)
+					if (c->iscovertfullscreen)
+						resizeclient(c, m->mx, m->my, m->mw, m->mh);
 				XMoveResizeWindow(dpy, m->barwin, m->wx, m->by, m->ww, bh);
 			}
 			focus(NULL);
@@ -1958,8 +1958,8 @@ resizemouse(const Arg *arg)
 
 	if (!(c = selmon->sel))
 		return;
-//	if (c->isfullscreen) /* no support resizing fullscreen windows by mouse */
-//		return;
+	if (c->iscovertfullscreen) /* no support resizing fullscreen windows by mouse */
+		return;
 	restack(selmon);
 	ocx = c->x;
 	ocy = c->y;
@@ -2373,13 +2373,16 @@ showhide(Client *c)
 		return;
 
 	if (ISVISIBLE(c)) {
-		/* show clients top down */
-		XMoveWindow(dpy, c->win, c->x, c->y);
-		if (!c->mon->lt[c->mon->sellt]->arrange || c->isfloating)
+		/* Show clients top down. Clients are shown by moving them into sight. */
+		XMoveWindow(dpy, c->win, c->x, c->y); // async
+		
+		/* ???: Why is this resize necessary for floating windows? */
+		if ((!c->iscovertfullscreen) && (!c->mon->lt[c->mon->sellt]->arrange || c->isfloating))
 			resize(c, c->x, c->y, c->w, c->h, 0);
 		showhide(c->snext);
 	} else {
-		/* hide clients bottom up */
+		/* Hide clients bottom up, presumably to avoid flickering. Windows are
+		 * hidden by simply moving them out of sight. */
 		showhide(c->snext);
 		XMoveWindow(dpy, c->win, WIDTH(c) * -2, c->y);
 	}
@@ -2621,7 +2624,7 @@ togglebar(const Arg *arg)
 void
 togglefloating(const Arg *arg)
 {
-	if (!selmon->sel)
+	if (!selmon->sel || selmon->sel->iscovertfullscreen)
 		return;
 	selmon->sel->isfloating = !selmon->sel->isfloating || selmon->sel->isfixed;
 	if (selmon->sel->isfloating)
@@ -3277,13 +3280,11 @@ main(int argc, char *argv[])
 
 // TODO(feat): Cycle layouts keybind and on click onto symbol
 
+// TODO: (Covert)Fullscreen window shall always have focus.
+//       Otherwise, new windows spawning in the background will
+//       change focus which prevents one from exiting fullscreen.
+
 // TODO(fix): Add gaps to monocle
-
-// TODO: Make -> CMake
-// 		  - [ ] Remove makefile
-// 		  - [ ] Install dwmswallow via cmake
-
-// TODO(fix): man pages
 
 // NOTE: dwm behaves differently inside Xephyr when using virtual monitors.
 //		 check recttomon(). When drawing bars somehow every monitor thinks
@@ -3293,57 +3294,6 @@ main(int argc, char *argv[])
 
 // TODO: valgrind memcheck
 
-// TODO: Swallow features
-// 	CONTINUEHERE: Extensive testing
-// 		  - [x] swaldecay
-// 		  - [ ] Nomenclature: pool vs queue
-//        - [x] delete swallows from list
-//           - [x] by swallow 's'
-//           - [x] all
-//           - [x] by window (indirect: swalmatch)
-//        - [ ] unswallow: swalstop()
-//           - [x] by client
-//           - [x] by window (indirect)
-//           - [x] selected client (hotkey)
-//           - [ ] all clients
-//        - [x] swallow (active) clients by window
-//        - [x] enum for types 0 - 3 of wintoclient2
-//        - [x] Swallow existing clients by cursor selection (Shift+mod -> move into swallower)
-//        - [x] Designate acive swallowed window by icon 👅
-//        - [x] Leave fullscreen prior to swallow
-//        - [x] Refactor CLI to match swal** naming scheme
-//        - [x] retroactive swallow (check swallows when wmname changes; req. for Zathura)
-//        - [x] nested swallow
-//        - [x] implement swalmanage() by reusing swal()
-//        - [ ] What about sizehints?
-//              + resizehints are respected in tiling mode
-//              + When swallowed by a floating client, hints are not respected and the
-//				  swer's geometry is adopted.
-//        - TEST: What happens if a swallowee gets unmapped/destroyed?
-//        - TEST: Swallow on multiple monitors
-//        - TEST: Run in release mode (no XSYNCHRONIZE)
-//        - TEST: Fullscreen swallows
-//        - TEST: { Tiling x Floating x Layout } swallows
-//        - TEST: Swallow windows on different tags (and different monitors)
-//        - TEST: Should window extend of remapped swallowers be pruned?
-//        - TEST: Stop swallow on other than the selected monitor (need cli).
-//        - TEST: swallow on non-selected monitor
-//        - TEST: swallow on non-selected tags
-//
-// BUGS: Swallow
-// - [ ] Crashing when VSCode asks to unlock the GPG keyring (??)
-//       Cannot reproduce.
-// - [x] Focus shall not be changed by stopping a swallow; Seems random.
-//    (differs between master and slave windows)
-// - [x] Stopped swallows for master clients created from queue (swalmanage)
-//    produce two windows with a highlighted border.
-//    Steps to reproduce:
-//     - Create terminal on empty tag
-//     - dwmswallow $WINDOWID; zathura
-//     - Ctrl-u (stop swap)
-// - [x] Focus after swalstop() depends on pointer position.
-//       Might need to ditch all EnterNotifys at the end of swalstop().
-//
 
 // TODO: Hotkey to configure whether urgent windows get shown immediately.
 //   The default behaviour (always view tag of urgent window) is annoying in
@@ -3352,7 +3302,6 @@ main(int argc, char *argv[])
 // Questions:
 //  - Killing a client always produces multiple unmap and destroy notifications. Why?
 //  - Killing a client causes an unmap before a destroy. Why?
-// TODO: dwmswallow installation is broken (does not exist?)
 // TODO: mod+`: Switch to empty tag (shortcut for scratchpad)
 // TODO: Move all windows in view to some other tag/window
 // TODO: Fix currently held focus
