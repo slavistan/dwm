@@ -2156,6 +2156,14 @@ setfocus(Client *c)
 void
 fakefullscreen(Client *c, int fullscreen)
 {
+	/* HACK: Remind the window of its geometry.
+	 *       Without this, clients assume their drawing area to be much larger
+	 *       than it is. I don't understand the reason of it. Do clients
+	 *       assume that _NET_WM_STATE_FULLSCREEN implies max geometry without
+	 *       having received any resize notifications?
+	 */
+	configure(c);
+
 	if (fullscreen && !c->isfakefullscreen) {
 		XChangeProperty(dpy, c->win, netatom[NetWMState], XA_ATOM, 32,
 			PropModeReplace, (unsigned char*)&netatom[NetWMFullscreen], 1);
@@ -2169,7 +2177,7 @@ fakefullscreen(Client *c, int fullscreen)
 }
 
 /*
- * Make a window fullscreen without informing the client.
+ * Make a window fullscreen without setting _NET_WM_STATE_FULLSCREEN.
  */
 void
 covertfullscreen(Client *c, int action)
