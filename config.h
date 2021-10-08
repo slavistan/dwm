@@ -37,9 +37,8 @@ static const Rule rules[] = {
 	 */
 	/* class            , instance  , title , tags mask , isfloating , isprotected , monitor */
 	{ "Gimp"            , NULL      , NULL  , 0         , 1          , 0           , -1 }       ,
-	{ "st-256color"     , "st-wiki" , NULL  , (1 << 8)  , 0          , 0           , -1 }       ,
 	{ "Microsoft Teams" , NULL      , NULL  , (1 << 7)  , 0          , 0           , -1 }       ,
-	{ "eww"             , NULL      , NULL  , (1 << 3)  , 1          , 0           , -1 }
+	{ "Todoist"         , "todoist" , NULL  , (1 << 8)  , 0          , 0           , -1 }       ,
  };
 
 /* window swallowing */
@@ -100,7 +99,6 @@ static Key keys[] = {
 	{ MODKEY|ShiftMask             , XK_equal  , setcfact        , {.f = +0.25} }       ,
 	{ MODKEY                       , XK_t      , setlayout       , {.v = &layouts[0]} } ,
 	{ MODKEY                       , XK_f      , togglecovertfullscreen, {0} } ,
-	{ MODKEY                       , XK_m      , setlayout       , {.v = &layouts[2]} } ,
 	{ MODKEY                       , XK_space  , setlayout       , {0} }                ,
 	{ MODKEY|ShiftMask             , XK_t      , toggleprotected , {0} }                ,
 	{ MODKEY|ShiftMask             , XK_space  , togglefloating  , {0} }                , // toggle float for client
