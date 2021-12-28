@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-ans=$(echo "Cancel\nYes" | dmenu -l 2 -p "Quit dwm?")
+ans="$(printf "Cancel\nYes" | dmenu -l 2 -p "Quit dwm?")"
 if [ "$ans" = "Yes" ]; then
 	kill -s QUIT $(pgrep dwm)
 fi
