@@ -19,6 +19,8 @@ FIXME: Changing active tags sometimes forgets focus history.
 TODO: Include relevant portion of dwm's original README (e.g. license)
 TODO: Build instructions
 FIXME: dmenu is not always shown on the currently focused monitor
+	   When there are no clients on the second monitor, dmenu will appear on
+	   the other screen.
 TODO: Implement duplex communication via unix-sockets (+ CLI tool)
 TODO: Add commands
       - fix focus
