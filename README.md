@@ -14,7 +14,15 @@ Notable modifications include:
 
 # Todos
 
-TODO(fix): Changing active tags sometimes forgets focus history.
+FIXME: Changing active tags sometimes forgets focus history.
   - Wrong window is activated
 TODO: Include relevant portion of dwm's original README (e.g. license)
 TODO: Build instructions
+FIXME: dmenu is not always shown on the currently focused monitor
+	   When there are no clients on the second monitor, dmenu will appear on
+	   the other screen.
+TODO: Implement duplex communication via unix-sockets (+ CLI tool)
+TODO: Add commands
+      - fix focus
+      - move multiple clients to other screen
+TODO: Add graphical selection of windows to manipulate

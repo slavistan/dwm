@@ -1,7 +1,7 @@
 /* See LICENSE file for copyright and license details. */
 
 /* appearance */
-static const unsigned int statusrpad = 12; /* padding right of status */
+static const unsigned int statusrpad = 12;     /* padding right of status */
 static const unsigned int borderpx = 1;        /* border pixel of windows */
 static const unsigned int gappx    = 10;       /* gaps between windows */
 static const unsigned int snap     = 0;        /* snap pixel */
