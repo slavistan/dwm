@@ -249,16 +249,15 @@ static void sighup(int unused);
 static void sigterm(int unused);
 static void spawn(const Arg *arg);
 static void swal(Client *swer, Client *swee, int manage);
-static void swaladdpool(Client *c, const char* class, const char* inst, const char* title);
 static void swaldecayby(int decayby);
 static void swalmanage(Swallow *s, Window w, XWindowAttributes *wa);
 static Swallow *swalmatch(Window w);
 static void swalmouse(const Arg *arg);
-static void swalrmpool(Swallow *s);
-static void swalrmpoolbyclient(Client *c);
+static void swalreg(Client *c, const char* class, const char* inst, const char* title);
+static void swalrm(Swallow *s);
 static void swalstop(Client *c, Client *root);
 static void swalstopsel(const Arg *unused);
-static void statusclick(const Arg *arg);
+static void swalunreg(Client *c);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
 static void tile(Monitor *);
@@ -1066,7 +1065,7 @@ fakesignal(void)
 	numsegments = split(rootname + sizeof(prefix) - 1, sep, segments, sizeof(segments));
 	numargs = numsegments - 1; /* number of arguments to COMMAND */
 
-	if (!strcmp(segments[0], "swaladdpool")) {
+	if (!strcmp(segments[0], "swalreg")) {
 		/* Params: windowid, [class], [instance], [title] */
 		Window w;
 		Client *c;
@@ -1076,7 +1075,7 @@ fakesignal(void)
 			switch (wintoclient2(w, &c, NULL)) {
 			case ClientRegular: /* fallthrough */
 			case ClientSwallowee:
-				swaladdpool(c, segments[2], segments[3], segments[4]);
+				swalreg(c, segments[2], segments[3], segments[4]);
 				break;
 			}
 		}
@@ -1097,7 +1096,7 @@ fakesignal(void)
 				swal(swer, swee, 0);
 		}
 	}
-	else if (!strcmp(segments[0], "swalrmpoolbyclient")) {
+	else if (!strcmp(segments[0], "swalunreg")) {
 		/* Params: swallower's windowid */
 		Client *swer;
 		Window winswer;
@@ -1105,7 +1104,7 @@ fakesignal(void)
 		if (numargs == 1) {
 			winswer = strtoul(segments[1], NULL, 0);
 			if ((swer = wintoclient(winswer)))
-				swalrmpoolbyclient(swer);
+				swalunreg(swer);
 		}
 	}
 	else if (!strcmp(segments[0], "swalstop")) {
@@ -1390,7 +1389,7 @@ swaldecayby(int decayby)
 		s->decay -= decayby;
 		t = s->next;
 		if (s->decay <= 0)
-			swalrmpool(s);
+			swalrm(s);
 	}
 }
 
@@ -1399,10 +1398,10 @@ swaldecayby(int decayby)
  * 'class', 'inst' and 'title' shall point null-terminated strings or be NULL,
  * implying a wildcard. If an existing swallow instance targets 'c' its filters
  * are updated and no new swallow instance is created. 'c' may be regular or
- * swallowee. Complement to swalrmpool().
+ * swallowee. Complement to swalrm().
  */
 void
-swaladdpool(Client *c, const char *class, const char *inst, const char *title)
+swalreg(Client *c, const char *class, const char *inst, const char *title)
 {
 	Swallow *s;
 
@@ -1535,7 +1534,7 @@ swalmanage(Swallow *s, Window w, XWindowAttributes *wa)
 	XWindowChanges wc;
 
 	swer = s->client;
-	swalrmpool(s);
+	swalrm(s);
 
 	/* Perform bare minimum setup of a client for window 'w' such that swal()
 	 * may be used to perform the swallow. The following lines are basically a
@@ -1883,11 +1882,11 @@ swalmouse(const Arg *arg)
 
 /*
  * Remove swallow instance from pool of swallows and free its resources.
- * Complement to swaladdpool(). If NULL is passed all swallows are deleted from
+ * Complement to swalreg(). If NULL is passed all swallows are deleted from
  * the pool.
  */
 void
-swalrmpool(Swallow *s)
+swalrm(Swallow *s)
 {
 	Swallow *t, **ps;
 
@@ -1909,13 +1908,13 @@ swalrmpool(Swallow *s)
  * If found, removes swallow instance which targets a specific client.
  */
 void
-swalrmpoolbyclient(Client *c)
+swalunreg(Client *c)
 {
 	Swallow *s;
 
 	for (s = swallows; s; s = s->next) {
 		if (c == s->client) {
-			swalrmpool(s);
+			swalrm(s);
 			break; /* max. 1 queued swallow per client */
 		}
 	}
@@ -2448,7 +2447,13 @@ swal(Client *swer, Client *swee, int manage)
 	 * a swallowee can swallow in a well-defined manner by attaching to the
 	 * head of the swallow chain. */
 	if (!manage)
-		swalrmpoolbyclient(swer);
+		swalunreg(swer);
+
+	/* Disable fullscreen prior to swallow. Swallows involving fullscreen
+	 * windows produces quirky artefacts such as fullscreen terminals or tiled
+	 * pseudo-fullscreen windows. */
+	fakefullscreen(swer, 0);
+	fakefullscreen(swee, 0);
 
 	/* Swap swallowee into client and focus lists. Keeps current focus unless
 	 * the swer (which gets unmapped) is focused in which case the swee will
@@ -2543,18 +2548,6 @@ swalstopsel(const Arg *unused)
 {
 	if (selmon->sel)
 		swalstop(selmon->sel, NULL);
-}
-
-void
-statusclick(const Arg *arg)
-{
-	const unsigned mbutton = arg->ui >> (sizeof(unsigned) * CHAR_BIT - 3);
-	const unsigned cindex = ((arg->ui << 3) >> 3);
-
-	sprintf(statusclick_cindex, "%u", cindex);
-	sprintf(statusclick_envs, "BUTTON=%u", mbutton);
-	const Arg arg2 = { .v = statusclick_cmd };
-	spawn(&arg2);
 }
 
 void
@@ -2703,7 +2696,7 @@ unmanage(Client *c, int destroyed)
 	Monitor *m = c->mon;
 
 	/* Remove all swallow instances targeting client. */
-	swalrmpoolbyclient(c);
+	swalunreg(c);
 
 	/* Remove client from lists */
 	detach(c);
