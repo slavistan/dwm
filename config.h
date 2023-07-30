@@ -7,7 +7,10 @@ static const unsigned int gappx    = 10;       /* gaps between windows */
 static const unsigned int snap     = 0;        /* snap pixel */
 static const int showbar           = 1;        /* 0 means no bar */
 static const int topbar            = 1;        /* 0 means bottom bar */
-static const char *fonts[]         = { "Roboto:size=12", "DejaVu Sans Mono Nerd Font:size=12", "DejaVuSansM Nerd Font:size=12"  };
+static const char *fonts[]         = { 
+	"DejaVuSansM Nerd Font:pixelsize=12:antialias=true:autohint=true"
+	"DejaVu Sans Mono Nerd Font:pixelsize=12:antialias=true:autohint=true",
+};
 static const char col_gray1[]      = "#222222";
 static const char col_gray2[]      = "#444444";
 static const char col_gray3[]      = "#bbbbbb";
@@ -58,9 +61,9 @@ static const int resizehints = 0;    /* 1 means respect size hints in tiled resi
 
 static const Layout layouts[] = {
 	/* symbol, arrange function */
-	{ "﩯"    , tile    }, /* first entry is default */
-	{ ""    , NULL    }, /* no layout function means floating behavior */
-	{ "𧻓"    , monocle },
+	{ "◧"    , tile    }, /* first entry is default */
+	{ "~"    , NULL    }, /* no layout function means floating behavior */
+	{ "o"    , monocle },
 };
 
 /* key definitions */
@@ -73,11 +76,6 @@ static const Layout layouts[] = {
 
 /* helper for spawning shell commands in the pre dwm-5.0 fashion */
 #define SHCMD(cmd) { .v = (const char*[]){ "/bin/sh", "-c", cmd, NULL } }
-
-/* commands */
-static char statusclick_cindex[10] = "\0"; /* buffer for index of clicked character, manipulated in statusclick() */
-static char statusclick_envs[12] = "\0"; /* buffer for mouse button, manipulated in statusclick() */
-static const char *statusclick_cmd[] = { "dwmbricks",  "-c", statusclick_cindex, "-e", statusclick_envs, NULL };
 
 static Key keys[] = {
 	/* modifier                   , key      , function      , argument            , */
