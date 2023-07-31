@@ -4,53 +4,28 @@
 SEP='###'
 PREFIX='#!'
 
-# Asserts that all arguments are valid X11 window IDs, i.e. positive integers.
-# For the purpose of this script 0 is declared invalid aswe
-is_winid() {
-	while :; do
-		# Given input incompatible to %d, some implementations of printf return
-		# an error while others silently evaluate the expression to 0.
-		if ! wid=$(printf '%d' "$1" 2>/dev/null) || [ "$wid" -le 0 ]; then
-			return 1
-		fi
-
-		[ -n "$2" ] && shift || break
-	done
-}
-
-# Prints usage help. If "$1" is provided, function exits script after
-# execution.
 usage() {
-	[ -t 1 ] && myprintf=printf || myprintf=true
-	msg="$(cat <<-EOF
-	dwm window swallowing command-line interface. Usage:
+	cat <<EOF
+dwm window swallowing command-line interface. Usage:
 
-	  $($myprintf "\033[1m")dwmswallow $($myprintf "\033[3m")SWALLOWER [-c CLASS] [-i INSTANCE] [-t TITLE]$($myprintf "\033[0m")
-	    Queue window $($myprintf "\033[3m")SWALLOWER$($myprintf "\033[0m") to swallow the next future window whose attributes
-	    match the $($myprintf "\033[3m")CLASS$($myprintf "\033[0m") name, $($myprintf "\033[3m")INSTANCE$($myprintf "\033[0m") name and window $($myprintf "\033[3m")TITLE$($myprintf "\033[0m") filters using basic
-	    string-matching. An omitted filter will match anything.
+	dwmswallow SWALLOWER [-c CLASS] [-i INSTANCE] [-t TITLE]
+		Queue window SWALLOWER to swallow the next future window whose attributes
+		match the CLASS name, INSTANCE name and window TITLE filters using basic
+		string-matching. An omitted filter will match anything.
 
-	  $($myprintf "\033[1m")dwmswallow $($myprintf "\033[3m")SWALLOWER -d$($myprintf "\033[0m")
-	    Delete any queued swallows for window $($myprintf "\033[3m")SWALLOWER$($myprintf "\033[0m"). Inverse of above signature.
+	dwmswallow SWALLOWER -d
+		Delete any queued swallows for window SWALLOWER. Inverse of above signature.
 
-	  $($myprintf "\033[1m")dwmswallow $($myprintf "\033[3m")SWALLOWER SWALLOWEE$($myprintf "\033[0m")
-	    Perform immediate swallow of window $($myprintf "\033[3m")SWALLOWEE$($myprintf "\033[0m") by window $($myprintf "\033[3m")SWALLOWER$($myprintf "\033[0m").
+	dwmswallow SWALLOWER SWALLOWEE
+		Perform immediate swallow of window SWALLOWEE by window SWALLOWER.
 
-	  $($myprintf "\033[1m")dwmswallow $($myprintf "\033[3m")SWALLOWEE -s$($myprintf "\033[0m")
-	    Unswallow window $($myprintf "\033[3m")SWALLOWEE$($myprintf "\033[0m"). Inverse of the above signature. Top-level windows
-	    only.
+	dwmswallow SWALLOWEE -s
+		Unswallow window SWALLOWEE. Inverse of the above signature. Top-level windows
+		only.
 
-	  $($myprintf "\033[1m")dwmswallow -h$($myprintf "\033[0m")
-	    Show this usage information.
-	EOF
-	)"
-
-	if [ -n "$1" ]; then
-		echo "$msg" >&2
-		exit "$1"
-	else
-		echo "$msg"
-	fi
+	dwmswallow -h
+		Show this usage information.
+EOF
 }
 
 # Determine number of leading positional arguments
@@ -66,55 +41,36 @@ done
 
 case "$num_pargs" in
 1)
-	! is_winid "$arg1" && usage 1
-		
 	widswer="$arg1"
 	if [ "$1" = "-d" ] && [ "$#" -eq 1 ]; then
-		if name="$(printf "${PREFIX}swalunreg${SEP}%u" "$widswer" 2>/dev/null)"; then
-			xsetroot -name "$name"
-		else
-			usage 1
-		fi
+		xsetroot -name "${PREFIX}swalunreg$SEP$widswer" 
 	elif [ "$1" = "-s" ] && [ "$#" -eq 1 ]; then
 		widswee="$arg1"
-		if name="$(printf "${PREFIX}swalstop${SEP}%u" "$widswee" 2>/dev/null)"; then
-			xsetroot -name "$name"
-		else
-			usage 1
-		fi
+		xsetroot -name "${PREFIX}swalstop$SEP$widswee" 
 	else
 		while :; do
 			case "$1" in
-			-c) [ -n "$2" ] && { class="$2"; shift 2; } || usage 1 ;;
-			-i) [ -n "$2" ] && { instance="$2"; shift 2; } || usage 1 ;;
-			-t) [ -n "$2" ] && { title="$2"; shift 2; } || usage 1 ;;
+			-c) [ -n "$2" ] && { class="$2"; shift 2; } || { usage >&2; exit 1; } ;;
+			-i) [ -n "$2" ] && { instance="$2"; shift 2; } || { usage >&2; exit 1; } ;;
+			-t) [ -n "$2" ] && { title="$2"; shift 2; } || { usage >&2; exit 1; } ;;
 			"") break ;;
-			*)	usage 1 ;;
+			*)	usage >&2; exit 1 ;;
 			esac
 		done
 		widswer="$arg1"
-		if name="$(printf "${PREFIX}swalreg${SEP}%u${SEP}%s${SEP}%s${SEP}%s" "$widswer" "$class" "$instance" "$title" 2>/dev/null)"; then
-			xsetroot -name "$name"
-		else
-			usage 1
-		fi
+		xsetroot -name "${PREFIX}swalreg$SEP$widswer$SEP$class$SEP$class$SEP$instance$SEP$title"
 	fi
 	;;
 2)
-	! is_winid "$arg1" "$arg2" || [ -n "$1" ] && usage 1
-
 	widswer="$arg1"
 	widswee="$arg2"
-	if name="$(printf "${PREFIX}swal${SEP}%u${SEP}%u" "$widswer" "$widswee" 2>/dev/null)"; then
-		xsetroot -name "$name"
-	else
-		usage 1
-	fi
+	xsetroot -name "${PREFIX}swal$SEP$widswer$SEP$widswee"
 	;;
 *)
 	if [ "$arg1" = "-h" ] && [ $# -eq 1 ]; then
 		usage
 	else
-		usage 1
+		usage >&2
+		exit 1
 	fi
 esac
