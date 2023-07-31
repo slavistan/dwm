@@ -70,7 +70,7 @@ case "$num_pargs" in
 		
 	widswer="$arg1"
 	if [ "$1" = "-d" ] && [ "$#" -eq 1 ]; then
-		if name="$(printf "${PREFIX}swalrmpoolbyclient${SEP}%u" "$widswer" 2>/dev/null)"; then
+		if name="$(printf "${PREFIX}swalunreg${SEP}%u" "$widswer" 2>/dev/null)"; then
 			xsetroot -name "$name"
 		else
 			usage 1
@@ -93,7 +93,7 @@ case "$num_pargs" in
 			esac
 		done
 		widswer="$arg1"
-		if name="$(printf "${PREFIX}swaladdpool${SEP}%u${SEP}%s${SEP}%s${SEP}%s" "$widswer" "$class" "$instance" "$title" 2>/dev/null)"; then
+		if name="$(printf "${PREFIX}swalreg${SEP}%u${SEP}%s${SEP}%s${SEP}%s" "$widswer" "$class" "$instance" "$title" 2>/dev/null)"; then
 			xsetroot -name "$name"
 		else
 			usage 1
